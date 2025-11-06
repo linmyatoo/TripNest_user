@@ -24,14 +24,40 @@ class _ReviewPageState extends State<ReviewPage> {
         children: [
           // header tile
           Container(
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(12)),
             child: ListTile(
               contentPadding: const EdgeInsets.all(12),
               leading: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: Image.network(event.imageUrl, width: 56, height: 56, fit: BoxFit.cover),
+                child: Image.network(
+                  event.imageUrl,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 56,
+                      height: 56,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.image_not_supported,
+                          color: Colors.grey, size: 24),
+                    );
+                  },
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      width: 56,
+                      height: 56,
+                      color: Colors.grey[200],
+                      child: const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                    );
+                  },
+                ),
               ),
-              title: Text(event.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              title: Text(event.title,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
               subtitle: Text(event.shortLocation),
             ),
           ),
@@ -43,7 +69,8 @@ class _ReviewPageState extends State<ReviewPage> {
               5,
               (i) => IconButton(
                 onPressed: () => setState(() => rating = i + 1),
-                icon: Icon(i < rating ? Icons.star : Icons.star_border, size: 28),
+                icon:
+                    Icon(i < rating ? Icons.star : Icons.star_border, size: 28),
               ),
             ),
           ),
@@ -54,7 +81,8 @@ class _ReviewPageState extends State<ReviewPage> {
             controller: textCtrl,
             minLines: 4,
             maxLines: 6,
-            decoration: const InputDecoration(hintText: 'Share your experience!'),
+            decoration:
+                const InputDecoration(hintText: 'Share your experience!'),
           ),
           const SizedBox(height: 20),
           PrimaryButton(

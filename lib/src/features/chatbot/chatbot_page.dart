@@ -28,6 +28,17 @@ class _ChatbotPageState extends State<ChatbotPage> {
               fit: BoxFit.cover,
               color: Colors.black.withOpacity(.35),
               colorBlendMode: BlendMode.darken,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: Colors.grey[700],
+                );
+              },
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  color: Colors.grey[300],
+                );
+              },
             ),
           ),
           // rounded “card” like your screenshot
@@ -40,20 +51,28 @@ class _ChatbotPageState extends State<ChatbotPage> {
                   borderRadius: BorderRadius.circular(18),
                 ),
                 padding: const EdgeInsets.all(16),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Search Event', style: TextStyle(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 10),
-                  TextField(
-                    decoration: InputDecoration(
-                      hintText: 'What would you like me to ask?',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: IconButton(onPressed: () {}, icon: const Icon(Icons.tune_outlined)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // … add filters/messages if needed
-                  Container(height: 220, color: Colors.transparent), // spacer for the blurred image area
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Search Event',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 10),
+                      TextField(
+                        decoration: InputDecoration(
+                          hintText: 'What would you like me to ask?',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: IconButton(
+                              onPressed: () {},
+                              icon: const Icon(Icons.tune_outlined)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // … add filters/messages if needed
+                      Container(
+                          height: 220,
+                          color: Colors
+                              .transparent), // spacer for the blurred image area
+                    ]),
               ),
             ],
           ),
@@ -66,21 +85,27 @@ class _ChatbotPageState extends State<ChatbotPage> {
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 child: Row(
                   children: [
-                    IconButton(onPressed: () {}, icon: const Icon(Icons.emoji_emotions_outlined)),
+                    IconButton(
+                        onPressed: () {},
+                        icon: const Icon(Icons.emoji_emotions_outlined)),
                     Expanded(
                       child: TextField(
                         controller: inputCtrl,
                         decoration: InputDecoration(
                           hintText: 'Write a message…',
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(28)),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(28)),
                           filled: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     FilledButton(onPressed: () {}, child: const Text('send')),
-                    IconButton(onPressed: () {}, icon: const Icon(Icons.mic_none_rounded)),
+                    IconButton(
+                        onPressed: () {},
+                        icon: const Icon(Icons.mic_none_rounded)),
                   ],
                 ),
               ),

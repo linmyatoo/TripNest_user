@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:tripnest/src/app_router.dart';
-import '../notifications/notification_feed_page.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../../data/mock_events.dart';
 import '../../widgets/event_card.dart';
+import '../notifications/notification_feed_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -129,7 +130,25 @@ class HomePage extends StatelessWidget {
               child: SizedBox(
                 height: 132, // <= key: fits the 220 lane
                 width: double.infinity,
-                child: Image.network(e.imageUrl, fit: BoxFit.cover),
+                child: Image.network(
+                  e.imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.image_not_supported,
+                          color: Colors.grey, size: 40),
+                    );
+                  },
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      color: Colors.grey[200],
+                      child: const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                    );
+                  },
+                ),
               ),
             ),
             Padding(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/event.dart';
+
 import '../core/theme/app_colors.dart';
+import '../models/event.dart';
 
 class EventCard extends StatelessWidget {
   const EventCard({
@@ -35,6 +36,26 @@ class EventCard extends StatelessWidget {
               width: 92,
               height: 72,
               fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 92,
+                  height: 72,
+                  color: Colors.grey[300],
+                  child:
+                      const Icon(Icons.image_not_supported, color: Colors.grey),
+                );
+              },
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  width: 92,
+                  height: 72,
+                  color: Colors.grey[200],
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(width: 12),
@@ -82,17 +103,21 @@ class EventCard extends StatelessWidget {
                           const TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                     const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${event.priceBaht}B/Person',
-                        // or: money(event.priceBaht) if you use a formatter
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${event.priceBaht}B/Person',
+                          // or: money(event.priceBaht) if you use a formatter
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ),
                   ],

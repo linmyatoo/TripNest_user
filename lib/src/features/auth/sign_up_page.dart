@@ -1,18 +1,96 @@
 import 'package:flutter/material.dart';
+
+import '../../core/services/auth_service.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/primary_button.dart';
 
-class SignUpPage extends StatelessWidget {
+class SignUpPage extends StatefulWidget {
   static const route = '/signup';
   const SignUpPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final name = TextEditingController();
-    final phone = TextEditingController();
-    final email = TextEditingController();
-    final password = TextEditingController();
+  State<SignUpPage> createState() => _SignUpPageState();
+}
 
+class _SignUpPageState extends State<SignUpPage> {
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLoading = false;
+  bool _agreedToTerms = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSignUp() async {
+    // Validation
+    if (_nameController.text.trim().isEmpty) {
+      _showError('Please enter your name');
+      return;
+    }
+    if (_emailController.text.trim().isEmpty) {
+      _showError('Please enter your email');
+      return;
+    }
+    if (_passwordController.text.trim().isEmpty) {
+      _showError('Please enter your password');
+      return;
+    }
+    if (!_agreedToTerms) {
+      _showError('Please agree to Terms and Conditions');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await AuthService.register(
+        username: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        role: 'user',
+      );
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        showDialog(
+          context: context,
+          builder: (_) => const _SignUpSuccessDialog(),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showError(e.toString().replaceAll('Exception: ', ''));
+      }
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('')),
       body: SafeArea(
@@ -21,59 +99,63 @@ class SignUpPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Create Your Account', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+              const Text('Create Your Account',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
-              const Text("Join us today and unlock endless possibilities. It's quick, easy, and just a step away!",
+              const Text(
+                  "Join us today and unlock endless possibilities. It's quick, easy, and just a step away!",
                   style: TextStyle(color: Color(0xFF6B7280))),
               const SizedBox(height: 22),
-
-              const Text('Full Name', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text('Full Name',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               AppTextField(
                 hint: 'Enter your name',
-                controller: name,
+                controller: _nameController,
                 textInputAction: TextInputAction.next,
                 prefix: const Icon(Icons.person_outline),
               ),
-
               const SizedBox(height: 16),
-              const Text('Phone Number', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text('Phone Number',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               AppTextField(
                 hint: 'Enter your number',
-                controller: phone,
+                controller: _phoneController,
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
                 prefix: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Image.asset('assets/images/flag_th.png', width: 22, height: 22),
+                    Image.asset('assets/images/flag_th.png',
+                        width: 22, height: 22),
                     const SizedBox(width: 8),
-                    const Text('+66', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const Text('+66',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(width: 8),
                     const VerticalDivider(width: 1.0, thickness: 1.0),
                     const SizedBox(width: 4),
                   ]),
                 ),
               ),
-
               const SizedBox(height: 16),
-              const Text('Email', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text('Email',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               AppTextField(
                 hint: 'Enter your email',
-                controller: email,
+                controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 prefix: const Icon(Icons.email_outlined),
               ),
-
               const SizedBox(height: 16),
-              const Text('Password', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text('Password',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               AppTextField(
                 hint: 'Enter your password',
-                controller: password,
+                controller: _passwordController,
                 obscure: true,
                 textInputAction: TextInputAction.done,
                 prefix: const Icon(Icons.lock_outline),
@@ -82,21 +164,26 @@ class SignUpPage extends StatelessWidget {
                   child: Icon(Icons.remove_red_eye_outlined),
                 ),
               ),
-
               const SizedBox(height: 22),
               PrimaryButton(
-                label: 'Sign Up',
-                onPressed: () {
-                  showDialog(context: context, builder: (_) => const _SignUpSuccessDialog());
-                },
+                label: _isLoading ? 'Signing Up...' : 'Sign Up',
+                onPressed: _isLoading ? null : _handleSignUp,
               ),
-
               const SizedBox(height: 10),
               Row(
                 children: [
                   SizedBox(
-                    width: 22, height: 22,
-                    child: Checkbox(value: false, onChanged: (_) {})),
+                    width: 22,
+                    height: 22,
+                    child: Checkbox(
+                      value: _agreedToTerms,
+                      onChanged: (value) {
+                        setState(() {
+                          _agreedToTerms = value ?? false;
+                        });
+                      },
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Wrap(
@@ -111,12 +198,12 @@ class SignUpPage extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 18),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 const Text('Already have an account? '),
                 GestureDetector(
-                  onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+                  onTap: () =>
+                      Navigator.pushReplacementNamed(context, '/login'),
                   child: const _Blue('Sign In'),
                 ),
               ]),
@@ -134,7 +221,9 @@ class _Blue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Text('Sign In', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.w600));
+    return Text(text,
+        style: const TextStyle(
+            color: Color(0xFF2563EB), fontWeight: FontWeight.w600));
   }
 }
 
@@ -161,17 +250,20 @@ class _SignUpSuccessDialog extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           // Blue check with soft halo
           Container(
-            width: 86, height: 86,
+            width: 86,
+            height: 86,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
                 colors: [Color(0xFFEFF6FF), Color(0xFFDDEBFF)],
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
             child: Center(
               child: Container(
-                width: 64, height: 64,
+                width: 64,
+                height: 64,
                 decoration: const BoxDecoration(
                   color: Color(0xFF2563EB), // AppColors.primary
                   shape: BoxShape.circle,
@@ -202,14 +294,16 @@ class _SignUpSuccessDialog extends StatelessWidget {
                 backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
                 elevation: 0,
               ),
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.pushReplacementNamed(context, '/login');
               },
-              child: const Text('Login Now', style: TextStyle(fontWeight: FontWeight.w600)),
+              child: const Text('Login Now',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
             ),
           ),
         ]),

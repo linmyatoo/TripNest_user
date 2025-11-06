@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../models/event.dart';
-import '../../core/widgets/primary_button.dart';
+
 import '../../app_router.dart';
+import '../../core/widgets/primary_button.dart';
+import '../../models/event.dart';
 
 class PaymentPage extends StatefulWidget {
   final Event event;
@@ -39,36 +40,47 @@ class _PaymentPageState extends State<PaymentPage> {
           _kv('Tax 10%', '10.00'),
           const Divider(height: 24),
           _kv('Total', '฿ ${total.toStringAsFixed(2)}', bold: true),
-
           const SizedBox(height: 18),
-          const Text('Select Payment', style: TextStyle(fontWeight: FontWeight.w800)),
+          const Text('Select Payment',
+              style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           _radio(0, 'Master Card'),
           _radio(1, 'Paypal'),
           const SizedBox(height: 12),
-
-          const Text('Card Number'), const SizedBox(height: 6),
+          const Text('Card Number'),
+          const SizedBox(height: 6),
           TextField(controller: cardCtrl),
           const SizedBox(height: 12),
-          const Text('Card Holder Name'), const SizedBox(height: 6),
+          const Text('Card Holder Name'),
+          const SizedBox(height: 6),
           TextField(controller: nameCtrl),
           const SizedBox(height: 12),
           Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Expired'), const SizedBox(height: 6), TextField(controller: expCtrl),
-            ])),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const Text('Expired'),
+                  const SizedBox(height: 6),
+                  TextField(controller: expCtrl),
+                ])),
             const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('CVV Code'), const SizedBox(height: 6), TextField(controller: cvvCtrl),
-            ])),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  const Text('CVV Code'),
+                  const SizedBox(height: 6),
+                  TextField(controller: cvvCtrl),
+                ])),
           ]),
-
           const SizedBox(height: 12),
           Row(children: [
-            Checkbox(value: true, onChanged: (_){}),
-            const Expanded(child: Text('By clicking, you agree to the rules, policies, and payment responsibility.')),
+            Checkbox(value: true, onChanged: (_) {}),
+            const Expanded(
+                child: Text(
+                    'By clicking, you agree to the rules, policies, and payment responsibility.')),
           ]),
-
           const SizedBox(height: 12),
           PrimaryButton(
             label: 'Pay Now',
@@ -76,7 +88,9 @@ class _PaymentPageState extends State<PaymentPage> {
               await _showSuccess(context);
               // reset stack to Home tab
               if (context.mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.appShell, (r) => false, arguments: 0);
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                    AppRoutes.appShell, (r) => false,
+                    arguments: 0);
               }
             },
           ),
@@ -91,7 +105,9 @@ class _PaymentPageState extends State<PaymentPage> {
       child: Row(
         children: [
           Expanded(child: Text(k)),
-          Text(v, style: TextStyle(fontWeight: bold ? FontWeight.w800 : FontWeight.w400)),
+          Text(v,
+              style: TextStyle(
+                  fontWeight: bold ? FontWeight.w800 : FontWeight.w400)),
         ],
       ),
     );
@@ -101,7 +117,10 @@ class _PaymentPageState extends State<PaymentPage> {
     return InkWell(
       onTap: () => setState(() => method = index),
       child: Row(children: [
-        Radio<int>(value: index, groupValue: method, onChanged: (v) => setState(() => method = v!)),
+        Radio<int>(
+            value: index,
+            groupValue: method,
+            onChanged: (v) => setState(() => method = v!)),
         Text(label),
       ]),
     );
@@ -109,12 +128,40 @@ class _PaymentPageState extends State<PaymentPage> {
 
   Widget _eventTile(Event e) {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         contentPadding: const EdgeInsets.all(12),
-        leading: ClipRRect(borderRadius: BorderRadius.circular(10),
-          child: Image.network(e.imageUrl, width: 56, height: 56, fit: BoxFit.cover)),
-        title: Text(e.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.network(
+            e.imageUrl,
+            width: 56,
+            height: 56,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: 56,
+                height: 56,
+                color: Colors.grey[300],
+                child: const Icon(Icons.image_not_supported,
+                    color: Colors.grey, size: 24),
+              );
+            },
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                width: 56,
+                height: 56,
+                color: Colors.grey[200],
+                child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              );
+            },
+          ),
+        ),
+        title:
+            Text(e.title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text('${e.location}\n${e.priceBaht}B/Person'),
         isThreeLine: true,
       ),
@@ -132,9 +179,11 @@ class _PaymentPageState extends State<PaymentPage> {
             const SizedBox(height: 6),
             const Icon(Icons.check_circle, size: 72, color: Colors.blue),
             const SizedBox(height: 14),
-            const Text('Booking Success!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            const Text('Booking Success!',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            const Text('Your payment has been successfully processed.\nYour booking is confirmed!',
+            const Text(
+                'Your payment has been successfully processed.\nYour booking is confirmed!',
                 textAlign: TextAlign.center),
             const SizedBox(height: 18),
             SizedBox(
