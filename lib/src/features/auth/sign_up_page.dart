@@ -19,6 +19,7 @@ class _SignUpPageState extends State<SignUpPage> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _agreedToTerms = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -33,6 +34,10 @@ class _SignUpPageState extends State<SignUpPage> {
     // Validation
     if (_nameController.text.trim().isEmpty) {
       _showError('Please enter your name');
+      return;
+    }
+    if (_phoneController.text.trim().isEmpty) {
+      _showError('Please enter your phone number');
       return;
     }
     if (_emailController.text.trim().isEmpty) {
@@ -55,6 +60,7 @@ class _SignUpPageState extends State<SignUpPage> {
     try {
       await AuthService.register(
         username: _nameController.text.trim(),
+        phone_number: _phoneController.text.trim(),
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
         role: 'user',
@@ -156,12 +162,23 @@ class _SignUpPageState extends State<SignUpPage> {
               AppTextField(
                 hint: 'Enter your password',
                 controller: _passwordController,
-                obscure: true,
+                obscure: _obscurePassword,
                 textInputAction: TextInputAction.done,
                 prefix: const Icon(Icons.lock_outline),
-                suffix: const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: Icon(Icons.remove_red_eye_outlined),
+                suffix: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                  ),
                 ),
               ),
               const SizedBox(height: 22),

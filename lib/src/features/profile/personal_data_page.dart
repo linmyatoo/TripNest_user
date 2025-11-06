@@ -3,14 +3,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
-import 'package:path_provider/path_provider.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
+import '../../core/services/auth_service.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/primary_button.dart';
-import '../../core/theme/app_colors.dart';
 
 class PersonalDataPage extends StatefulWidget {
   static const route = '/personal-data';
@@ -21,14 +22,52 @@ class PersonalDataPage extends StatefulWidget {
 }
 
 class _PersonalDataPageState extends State<PersonalDataPage> {
-  final nameCtrl = TextEditingController(text: 'Harry');
-  final emailCtrl = TextEditingController(text: 'harry3435@gmail.com');
-  final phoneCtrl = TextEditingController(text: '83542015258');
+  final nameCtrl = TextEditingController();
+  final emailCtrl = TextEditingController();
+  final phoneCtrl = TextEditingController();
   final dobCtrl = TextEditingController(text: 'November 24, 2000');
 
   final _picker = ImagePicker();
   File? _avatar; // local preview image
   static const int _maxBytes = 1024 * 1024; // 1 MB
+
+  bool _isLoading = true;
+  String? _userId; // Store user ID for future use (e.g., updating profile)
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await AuthService.getUserProfile();
+      if (response['success'] == true && response['user'] != null) {
+        final user = response['user'];
+        setState(() {
+          _userId = user['_id'];
+          nameCtrl.text = user['username'] ?? '';
+          emailCtrl.text = user['email'] ?? '';
+          phoneCtrl.text = user['phone_number'] ?? '';
+          _isLoading = false;
+        });
+        print('Profile loaded for user ID: $_userId');
+      }
+    } catch (e) {
+      if (mounted) {
+        _snack(
+            'Error loading profile: ${e.toString().replaceAll('Exception: ', '')}');
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   void _snack(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
@@ -188,6 +227,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     final avatarProvider = _avatar != null
         ? FileImage(_avatar!)
@@ -197,99 +237,113 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
       appBar: AppBar(
         leading: const BackButton(),
         title: const Text('Personal Data'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadProfile,
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          children: [
-            const SizedBox(height: 8),
-            Center(
-              child: Stack(
-                clipBehavior: Clip.none,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
-                  CircleAvatar(radius: 52, backgroundImage: avatarProvider),
-                  // Pencil button at bottom-right
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: Material(
-                      color: AppColors.primary,
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: _showAvatarPickerSheet,
-                        child: const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child:
-                              Icon(Icons.edit, size: 18, color: Colors.white),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        CircleAvatar(
+                            radius: 52, backgroundImage: avatarProvider),
+                        // Pencil button at bottom-right
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Material(
+                            color: AppColors.primary,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: _showAvatarPickerSheet,
+                              child: const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.edit,
+                                    size: 18, color: Colors.white),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text('Full Name',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  AppTextField(hint: 'Harry', controller: nameCtrl),
+                  const SizedBox(height: 16),
+                  const Text('Email',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  AppTextField(
+                    hint: 'harry3435@gmail.com',
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Phone Number',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  AppTextField(
+                    hint: '83542015258',
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    prefix: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child:
+                          Row(mainAxisSize: MainAxisSize.min, children: const [
+                        Text('+65',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        SizedBox(width: 8),
+                        VerticalDivider(width: 1, thickness: 1),
+                        SizedBox(width: 4),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Date of Birth',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: dobCtrl,
+                    readOnly: true,
+                    onTap: _pickDob,
+                    decoration: const InputDecoration(
+                      hintText: 'November 24, 2000',
+                      suffixIcon: Icon(Icons.calendar_today_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Gender',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  const AppTextField(hint: ''),
+                  const SizedBox(height: 22),
+                  PrimaryButton(
+                    label: 'Save Canges', // (keeping your Figma label)
+                    onPressed: () {
+                      // Navigate back to Profile page
+                      Navigator.pop(context);
+                      // Optionally show feedback
+                      // _snack('Profile updated (mock)');
+                    },
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 18),
-            const Text('Full Name',
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            AppTextField(hint: 'Harry', controller: nameCtrl),
-            const SizedBox(height: 16),
-            const Text('Email', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            AppTextField(
-              hint: 'harry3435@gmail.com',
-              controller: emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 16),
-            const Text('Phone Number',
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            AppTextField(
-              hint: '83542015258',
-              controller: phoneCtrl,
-              keyboardType: TextInputType.phone,
-              prefix: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                  Text('+65', style: TextStyle(fontWeight: FontWeight.w600)),
-                  SizedBox(width: 8),
-                  VerticalDivider(width: 1, thickness: 1),
-                  SizedBox(width: 4),
-                ]),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text('Date of Birth',
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: dobCtrl,
-              readOnly: true,
-              onTap: _pickDob,
-              decoration: const InputDecoration(
-                hintText: 'November 24, 2000',
-                suffixIcon: Icon(Icons.calendar_today_outlined),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text('Gender', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            const AppTextField(hint: ''),
-            const SizedBox(height: 22),
-            PrimaryButton(
-              label: 'Save Canges', // (keeping your Figma label)
-              onPressed: () {
-                // Navigate back to Profile page
-                Navigator.pop(context);
-                // Optionally show feedback
-                // _snack('Profile updated (mock)');
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

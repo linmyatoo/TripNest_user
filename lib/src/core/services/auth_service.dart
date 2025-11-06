@@ -73,6 +73,7 @@ class AuthService {
   /// Returns a Map with the response data if successful, or throws an exception
   static Future<Map<String, dynamic>> register({
     required String username,
+    required String phone_number,
     required String email,
     required String password,
     String role = 'user', // default role is 'user'
@@ -87,6 +88,7 @@ class AuthService {
         },
         body: jsonEncode({
           'username': username,
+          'phone_number': phone_number,
           'email': email,
           'password': password,
           'role': role,
@@ -144,6 +146,73 @@ class AuthService {
         // Login failed
         throw Exception(data['message'] ?? 'Login failed');
       }
+    } catch (e) {
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  /// Get user profile from API
+  static Future<Map<String, dynamic>> getUserProfile() async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/user/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      print('=================================');
+      print('USER PROFILE RESPONSE');
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+      print('=================================');
+
+      if (response.statusCode >= 500) {
+        throw Exception('Server error. Please try again later.');
+      }
+
+      if (response.body.isEmpty) {
+        throw Exception('Empty response from server');
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (e) {
+        print('JSON Parse Error: $e');
+        if (response.body.contains('<!DOCTYPE html>') ||
+            response.body.contains('<html>')) {
+          throw Exception('Server error occurred. Please try again later.');
+        }
+        throw Exception('Invalid server response');
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        print('=================================');
+        print('USER PROFILE LOADED');
+        print('=================================');
+        print('User ID: ${data['user']['_id']}');
+        print('Username: ${data['user']['username']}');
+        print('Email: ${data['user']['email']}');
+        print('Phone: ${data['user']['phone_number']}');
+        print('Role: ${data['user']['role']}');
+        print('=================================');
+        return data;
+      } else {
+        throw Exception(data['message'] ?? 'Failed to load profile');
+      }
+    } on FormatException catch (e) {
+      print('Format Exception: $e');
+      throw Exception('Server response format error');
     } catch (e) {
       if (e.toString().contains('Exception:')) {
         rethrow;

@@ -1,6 +1,6 @@
 {
-    "name": "tripnest2",
-    "short_name": "tripnest2",
+    "name": "TripNest",
+    "short_name": "TripNest",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
