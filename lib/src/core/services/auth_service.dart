@@ -220,4 +220,70 @@ class AuthService {
       throw Exception('Network error: ${e.toString()}');
     }
   }
+
+  /// Forgot password - sends reset link to email
+  static Future<Map<String, dynamic>> forgotPassword({
+    required String email,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/forgot-password'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'email': email,
+        }),
+      );
+
+      print('=================================');
+      print('FORGOT PASSWORD RESPONSE');
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+      print('=================================');
+
+      // Handle server errors
+      if (response.statusCode >= 500) {
+        throw Exception('Server error. Please try again later.');
+      }
+
+      // Handle empty response
+      if (response.body.isEmpty) {
+        if (response.statusCode == 200) {
+          return {'success': true, 'message': 'Reset link sent to your email'};
+        } else {
+          throw Exception('Failed to send reset link');
+        }
+      }
+
+      // Try to parse JSON response
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (e) {
+        print('JSON Parse Error: $e');
+
+        if (response.body.contains('<!DOCTYPE html>') ||
+            response.body.contains('<html>')) {
+          throw Exception('Server error occurred. Please try again later.');
+        }
+
+        throw Exception('Invalid server response');
+      }
+
+      if (response.statusCode == 200) {
+        return data;
+      } else {
+        throw Exception(data['message'] ?? 'Failed to send reset link');
+      }
+    } on FormatException catch (e) {
+      print('Format Exception: $e');
+      throw Exception('Server response format error');
+    } catch (e) {
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
 }

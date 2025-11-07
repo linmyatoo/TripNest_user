@@ -1,30 +1,28 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform, kIsWeb;
+import 'package:flutter/material.dart';
 
 import 'app_shell.dart';
-import 'models/event.dart'; // 👈 for (settings.arguments as Event)
-
-import 'features/splash/admin_splash_page.dart';
-import 'features/onboarding/onboarding_page.dart';
+import 'features/auth/forgot_password_page.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/sign_up_page.dart';
-import 'features/notifications/notification_feed_page.dart';
-
-import 'features/profile/personal_data_page.dart';
-import 'features/profile/change_password_page.dart';
-import 'features/profile/notifications_settings_page.dart';
-import 'features/profile/security_page.dart';
-import 'features/profile/privacy_policy_page.dart';
-import 'features/profile/help_center_page.dart';
-
-import 'features/details/event_detail_page.dart';
-import 'features/payment/payment_page.dart';
-import 'features/search/search_page.dart';
-import 'features/search/search_results_page.dart';
 import 'features/booking/review_page.dart';
 import 'features/chatbot/chatbot_page.dart';
+import 'features/details/event_detail_page.dart';
+import 'features/notifications/notification_feed_page.dart';
+import 'features/onboarding/onboarding_page.dart';
+import 'features/payment/payment_page.dart';
+import 'features/profile/change_password_page.dart';
+import 'features/profile/help_center_page.dart';
+import 'features/profile/notifications_settings_page.dart';
+import 'features/profile/personal_data_page.dart';
+import 'features/profile/privacy_policy_page.dart';
+import 'features/profile/security_page.dart';
+import 'features/search/search_page.dart';
+import 'features/search/search_results_page.dart';
+import 'features/splash/admin_splash_page.dart';
+import 'models/event.dart'; // 👈 for (settings.arguments as Event)
 
 class AppRoutes {
   static const appShell = '/app';
@@ -55,6 +53,8 @@ class AppRouter {
         return _adaptive(const LoginPage(), settings: settings);
       case SignUpPage.route:
         return _adaptive(const SignUpPage(), settings: settings);
+      case ForgotPasswordPage.route:
+        return _adaptive(const ForgotPasswordPage(), settings: settings);
       case NotificationFeedPage.route:
         return _adaptive(const NotificationFeedPage(), settings: settings);
 

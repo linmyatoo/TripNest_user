@@ -139,7 +139,9 @@ class _LoginPageState extends State<LoginPage> {
               Align(
                 alignment: Alignment.centerRight,
                 child: GestureDetector(
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pushNamed(context, '/forgot-password');
+                  },
                   child: const Text('Forgot Password?',
                       style: TextStyle(
                           color: Color(0xFF2563EB),
