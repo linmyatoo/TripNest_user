@@ -1,16 +1,99 @@
 import 'package:flutter/material.dart';
 
 import '../../app_router.dart';
+import '../../core/services/event_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/event.dart';
 
-class EventDetailPage extends StatelessWidget {
-  const EventDetailPage({super.key, required this.event});
-  final Event event;
+class EventDetailPage extends StatefulWidget {
+  const EventDetailPage({super.key, required this.eventId});
+  final String eventId;
+
+  @override
+  State<EventDetailPage> createState() => _EventDetailPageState();
+}
+
+class _EventDetailPageState extends State<EventDetailPage> {
+  Event? _event;
+  bool _isLoading = true;
+  String? _errorMessage;
+  int _personCount = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEvent();
+  }
+
+  Future<void> _loadEvent() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final event = await EventService.getEventById(widget.eventId);
+      setState(() {
+        _event = event;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              onPressed: () => Navigator.pop(context)),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_errorMessage != null || _event == null) {
+      return Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              onPressed: () => Navigator.pop(context)),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text('Error loading event',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(_errorMessage ?? 'Event not found',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.muted)),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _loadEvent,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final event = _event!;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -51,8 +134,11 @@ class EventDetailPage extends StatelessWidget {
             Expanded(
                 child: PrimaryButton(
               label: 'Book Now',
-              onPressed: () => Navigator.pushNamed(context, AppRoutes.payment,
-                  arguments: event),
+              onPressed: () => Navigator.pushNamed(
+                context,
+                AppRoutes.payment,
+                arguments: {'event': event, 'personCount': _personCount},
+              ),
             )),
           ],
         ),
@@ -171,9 +257,69 @@ class EventDetailPage extends StatelessWidget {
                     alignment: Alignment.center,
                     child: const Text('Map Placeholder')),
               ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border.withOpacity(0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_outline, color: AppColors.muted),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text('Number of Persons',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                    _CounterButton(
+                      icon: Icons.remove,
+                      onTap: _personCount > 1
+                          ? () => setState(() => _personCount -= 1)
+                          : null,
+                    ),
+                    SizedBox(
+                      width: 40,
+                      child: Text('$_personCount',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w700)),
+                    ),
+                    _CounterButton(
+                      icon: Icons.add,
+                      onTap: () => setState(() => _personCount += 1),
+                    ),
+                  ],
+                ),
+              ),
             ]),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CounterButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  const _CounterButton({required this.icon, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 34,
+        width: 34,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: onTap == null ? AppColors.border : AppColors.primary,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon,
+            color: Colors.white.withOpacity(onTap == null ? 0.4 : 1), size: 18),
       ),
     );
   }

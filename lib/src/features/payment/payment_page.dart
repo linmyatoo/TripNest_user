@@ -1,12 +1,32 @@
 import 'package:flutter/material.dart';
 
 import '../../app_router.dart';
+import '../../core/services/booking_service.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/event.dart';
 
+class PaymentPageArgs {
+  final Event event;
+  final String? bookingId;
+  final int personCount;
+
+  const PaymentPageArgs({
+    required this.event,
+    this.bookingId,
+    this.personCount = 1,
+  });
+}
+
 class PaymentPage extends StatefulWidget {
   final Event event;
-  const PaymentPage({super.key, required this.event});
+  final String? bookingId;
+  final int personCount;
+  const PaymentPage({
+    super.key,
+    required this.event,
+    this.bookingId,
+    this.personCount = 1,
+  });
 
   @override
   State<PaymentPage> createState() => _PaymentPageState();
@@ -18,13 +38,25 @@ class _PaymentPageState extends State<PaymentPage> {
   final nameCtrl = TextEditingController(text: 'Harry');
   final expCtrl = TextEditingController(text: '12/25');
   final cvvCtrl = TextEditingController(text: '720');
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    cardCtrl.dispose();
+    nameCtrl.dispose();
+    expCtrl.dispose();
+    cvvCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final e = widget.event;
-    final discount = (e.priceBaht * 0.1).round();
-    final tax = 10;
-    final total = e.priceBaht - discount + tax;
+    final personCount = widget.personCount <= 0 ? 1 : widget.personCount;
+    final ticketFee = e.priceBaht * personCount;
+    final discount = ticketFee * 0.1;
+    const tax = 10.0;
+    final total = ticketFee - discount + tax;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Review Booking')),
@@ -35,9 +67,9 @@ class _PaymentPageState extends State<PaymentPage> {
           const SizedBox(height: 12),
           const Text('Detail', style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
-          _kv('Ticket Fee', e.priceBaht.toStringAsFixed(2)),
-          _kv('Discount', '- $discount.00'),
-          _kv('Tax 10%', '10.00'),
+          _kv('Ticket Fee (x$personCount)', ticketFee.toStringAsFixed(2)),
+          _kv('Discount', '- ${discount.toStringAsFixed(2)}'),
+          _kv('Tax 10%', tax.toStringAsFixed(2)),
           const Divider(height: 24),
           _kv('Total', '฿ ${total.toStringAsFixed(2)}', bold: true),
           const SizedBox(height: 18),
@@ -83,16 +115,8 @@ class _PaymentPageState extends State<PaymentPage> {
           ]),
           const SizedBox(height: 12),
           PrimaryButton(
-            label: 'Pay Now',
-            onPressed: () async {
-              await _showSuccess(context);
-              // reset stack to Home tab
-              if (context.mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil(
-                    AppRoutes.appShell, (r) => false,
-                    arguments: 0);
-              }
-            },
+            label: _isSubmitting ? 'Processing...' : 'Pay Now',
+            onPressed: _isSubmitting ? null : _handlePayNow,
           ),
         ],
       ),
@@ -168,8 +192,54 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
-  Future<void> _showSuccess(BuildContext context) async {
-    return showDialog(
+  Future<void> _handlePayNow() async {
+    final event = widget.event;
+    final personCount = widget.personCount <= 0 ? 1 : widget.personCount;
+    final ticketFee = event.priceBaht * personCount;
+    final discount = ticketFee * 0.1;
+    const tax = 10.0;
+    final total = ticketFee - discount + tax;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final booking = await BookingService.createBooking(
+        eventId: event.id,
+        ticketCounts: personCount,
+      );
+
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+
+      await _showResultDialog(
+        isSuccess: true,
+        title: 'Booking Success',
+        message: 'Your payment has been successfully processed.',
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.appShell, (r) => false,
+          arguments: 0);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+
+      await _showResultDialog(
+        isSuccess: false,
+        title: 'Payment Failed',
+        message: e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
+  }
+
+  Future<void> _showResultDialog({
+    required bool isSuccess,
+    required String title,
+    required String message,
+  }) async {
+    if (!mounted) return;
+    await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => Dialog(
@@ -177,20 +247,23 @@ class _PaymentPageState extends State<PaymentPage> {
           padding: const EdgeInsets.all(20),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const SizedBox(height: 6),
-            const Icon(Icons.check_circle, size: 72, color: Colors.blue),
+            Icon(
+              isSuccess ? Icons.check_circle : Icons.error_outline,
+              size: 72,
+              color: isSuccess ? Colors.blue : Colors.red,
+            ),
             const SizedBox(height: 14),
-            const Text('Booking Success!',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
-            const Text(
-                'Your payment has been successfully processed.\nYour booking is confirmed!',
-                textAlign: TextAlign.center),
+            Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Go To Home'),
+                child: const Text('Close'),
               ),
             ),
           ]),

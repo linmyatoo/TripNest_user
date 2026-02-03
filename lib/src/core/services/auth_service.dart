@@ -4,13 +4,13 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const String baseUrl =
-      'https://underground-brittni-tripnest-82c64bf9.koyeb.app/api';
+  static const String baseUrl = 'https://naylinhtet.me/api';
 
   // Storage keys
   static const String _tokenKey = 'auth_token';
   static const String _userIdKey = 'user_id';
   static const String _usernameKey = 'username';
+  static const String _nameKey = 'name';
   static const String _emailKey = 'email';
   static const String _roleKey = 'role';
 
@@ -26,6 +26,7 @@ class AuthService {
     await prefs.setString(_tokenKey, token);
     await prefs.setString(_userIdKey, userId);
     await prefs.setString(_usernameKey, username);
+    await prefs.setString(_nameKey, username);
     await prefs.setString(_emailKey, email);
     await prefs.setString(_roleKey, role);
   }
@@ -48,6 +49,7 @@ class AuthService {
     return {
       'id': prefs.getString(_userIdKey),
       'username': prefs.getString(_usernameKey),
+      'name': prefs.getString(_nameKey),
       'email': prefs.getString(_emailKey),
       'role': prefs.getString(_roleKey),
     };
@@ -65,6 +67,7 @@ class AuthService {
     await prefs.remove(_tokenKey);
     await prefs.remove(_userIdKey);
     await prefs.remove(_usernameKey);
+    await prefs.remove(_nameKey);
     await prefs.remove(_emailKey);
     await prefs.remove(_roleKey);
   }
@@ -81,19 +84,31 @@ class AuthService {
     try {
       final url = Uri.parse('$baseUrl/auth/register');
 
+      print('Registering user at: $url');
+      print('Request body: ${jsonEncode({
+            'name': username,
+            'phone_number': phone_number,
+            'email': email,
+            'password': password,
+            'role': role,
+          })}');
+
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
-          'username': username,
+          'name': username,
           'phone_number': phone_number,
           'email': email,
           'password': password,
           'role': role,
         }),
       );
+
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
 
       final data = jsonDecode(response.body);
 
@@ -105,6 +120,10 @@ class AuthService {
         throw Exception(data['message'] ?? 'Registration failed');
       }
     } catch (e) {
+      print('Registration error: $e');
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
       throw Exception('Network error: ${e.toString()}');
     }
   }
@@ -131,15 +150,18 @@ class AuthService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        // Login successful - save session
-        if (data['token'] != null && data['user'] != null) {
+        final token = _extractToken(data);
+        if (token != null) {
+          final user = _extractUser(data);
           await _saveSession(
-            token: data['token'],
-            userId: data['user']['id'],
-            username: data['user']['username'],
-            email: data['user']['email'],
-            role: data['user']['role'],
+            token: token,
+            userId: _firstNonEmpty(user, ['id', '_id', 'userId']) ?? 'unknown',
+            username: _firstNonEmpty(user, ['username', 'name']) ?? 'User',
+            email: _firstNonEmpty(user, ['email']) ?? 'unknown@user',
+            role: _firstNonEmpty(user, ['role']) ?? 'user',
           );
+        } else {
+          print('Login succeeded but no token was found in the response.');
         }
         return data;
       } else {
@@ -285,5 +307,54 @@ class AuthService {
       }
       throw Exception('Network error: ${e.toString()}');
     }
+  }
+
+  static String? _extractToken(Map<String, dynamic> payload) {
+    final candidates = [
+      payload['token'],
+      payload['accessToken'],
+      payload['access_token'],
+      payload['jwt'],
+      if (payload['data'] is Map<String, dynamic>)
+        (payload['data'] as Map<String, dynamic>)['token'],
+    ];
+    for (final candidate in candidates) {
+      if (candidate is String && candidate.isNotEmpty) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  static Map<String, dynamic>? _extractUser(Map<String, dynamic> payload) {
+    final directUser = payload['user'];
+    if (directUser is Map<String, dynamic>) return directUser;
+
+    final dataUser = payload['data'];
+    if (dataUser is Map<String, dynamic>) {
+      final nestedUser = dataUser['user'];
+      if (nestedUser is Map<String, dynamic>) {
+        return nestedUser;
+      }
+    }
+
+    final profile = payload['profile'];
+    if (profile is Map<String, dynamic>) {
+      return profile;
+    }
+
+    return null;
+  }
+
+  static String? _firstNonEmpty(
+      Map<String, dynamic>? source, List<String> potentialKeys) {
+    if (source == null) return null;
+    for (final key in potentialKeys) {
+      final value = source[key];
+      if (value is String && value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
   }
 }

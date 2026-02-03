@@ -1,94 +1,200 @@
 import 'package:flutter/material.dart';
 import 'package:tripnest/src/app_router.dart';
 
+import '../../core/services/auth_service.dart';
+import '../../core/services/event_service.dart';
 import '../../core/theme/app_colors.dart';
-import '../../data/mock_events.dart';
+import '../../models/event.dart';
 import '../../widgets/event_card.dart';
 import '../notifications/notification_feed_page.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  List<Event> _popularEvents = [];
+  List<Event> _upcomingEvents = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  String _displayName = 'Traveler';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserName();
+    _loadEvents();
+  }
+
+  Future<void> _loadUserName() async {
+    try {
+      final userData = await AuthService.getUserData();
+      final name = userData['username'];
+      if (!mounted || name == null || name.isEmpty) return;
+      setState(() {
+        _displayName = name;
+      });
+    } catch (_) {
+      // Ignore errors and keep the fallback name.
+    }
+  }
+
+  Future<void> _loadEvents() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        EventService.getEvents(),
+        EventService.getUpcomingEvents(),
+      ]);
+
+      setState(() {
+        _popularEvents = results[0];
+        _upcomingEvents = results[1];
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: _topBar(context),
-      floatingActionButton: _chatbotFab(context),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          // search bar
-          GestureDetector(
-            onTap: () => Navigator.of(context).pushNamed(AppRoutes.search),
-            child: Container(
-              height: 46,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFD1D5DB)),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.centerLeft,
-              child: const Row(
-                children: [
-                  Icon(Icons.search, color: AppColors.muted),
-                  SizedBox(width: 8),
-                  Text('What would you like me to ask?',
-                      style: TextStyle(color: AppColors.muted)),
-                ],
-              ),
-            ),
-          ),
+    return WillPopScope(
+      onWillPop: () async => false, // Prevent back navigation
+      child: Scaffold(
+        appBar: _topBar(context),
+        floatingActionButton: _chatbotFab(context),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _errorMessage != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        const Text('Error loading events',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Text(_errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppColors.muted)),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _loadEvents,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadEvents,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      children: [
+                        // search bar
+                        GestureDetector(
+                          onTap: () =>
+                              Navigator.of(context).pushNamed(AppRoutes.search),
+                          child: Container(
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              border:
+                                  Border.all(color: const Color(0xFFD1D5DB)),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            alignment: Alignment.centerLeft,
+                            child: const Row(
+                              children: [
+                                Icon(Icons.search, color: AppColors.muted),
+                                SizedBox(width: 8),
+                                Text('What would you like me to ask?',
+                                    style: TextStyle(color: AppColors.muted)),
+                              ],
+                            ),
+                          ),
+                        ),
 
-          const SizedBox(height: 18),
-          const Text('Popular Events',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
+                        const SizedBox(height: 18),
+                        const Text('Popular Events',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 8),
 
-          // horizontal cards like your hero cards
-          SizedBox(
-            height: 252,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: mockEvents.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 14),
-              itemBuilder: (context, i) {
-                final e = mockEvents[i];
-                return _heroCard(context, e);
-              },
-            ),
-          ),
+                        // horizontal cards
+                        _popularEvents.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(32.0),
+                                  child: Text('No events available',
+                                      style: TextStyle(color: AppColors.muted)),
+                                ),
+                              )
+                            : SizedBox(
+                                height: 252,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: _popularEvents.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(width: 14),
+                                  itemBuilder: (context, i) {
+                                    final e = _popularEvents[i];
+                                    return _heroCard(context, e);
+                                  },
+                                ),
+                              ),
 
-          const SizedBox(height: 16),
-          const Text('Upcoming events',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 10),
+                        const SizedBox(height: 16),
+                        const Text('Upcoming events',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 10),
 
-          // vertical list matching your “Upcoming events”
-          ...mockEvents.map((e) => EventCard(
-                event: e,
-                onTap: () => Navigator.pushNamed(
-                    context, AppRoutes.eventDetails,
-                    arguments: e),
-              )),
-        ],
+                        // vertical list
+                        if (_upcomingEvents.isEmpty)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32.0),
+                              child: Text('No upcoming events',
+                                  style: TextStyle(color: AppColors.muted)),
+                            ),
+                          )
+                        else
+                          ..._upcomingEvents.map((e) => EventCard(
+                                event: e,
+                                onTap: () => Navigator.pushNamed(
+                                    context, AppRoutes.eventDetails,
+                                    arguments: e.id),
+                              )),
+                      ],
+                    ),
+                  ),
       ),
     );
   }
 
   PreferredSizeWidget _topBar(BuildContext context) {
     return AppBar(
+      automaticallyImplyLeading: false, // Remove back button
       titleSpacing: 16,
       title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Harry',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-        SizedBox(height: 2),
-        Row(children: [
-          Icon(Icons.location_on_outlined, size: 16, color: AppColors.muted),
-          SizedBox(width: 4),
-          Text('Chiang Rai , Thailand',
-              style: TextStyle(fontSize: 12, color: AppColors.muted)),
-        ]),
+        Text(_displayName,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
       ]),
       actions: [
         IconButton(
@@ -113,7 +219,7 @@ class HomePage extends StatelessWidget {
   Widget _heroCard(BuildContext context, e) {
     return InkWell(
       onTap: () =>
-          Navigator.pushNamed(context, AppRoutes.eventDetails, arguments: e),
+          Navigator.pushNamed(context, AppRoutes.eventDetails, arguments: e.id),
       borderRadius: BorderRadius.circular(18),
       child: Ink(
         width: 280,

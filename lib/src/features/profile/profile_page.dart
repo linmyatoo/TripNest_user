@@ -21,6 +21,8 @@ class _ProfilePageState extends State<ProfilePage> {
   String _username = 'User';
   String _email = 'user@example.com';
 
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -28,11 +30,20 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadUserData() async {
-    final userData = await AuthService.getUserData();
-    setState(() {
-      _username = userData['username'] ?? 'User';
-      _email = userData['email'] ?? 'user@example.com';
-    });
+    try {
+      final userData = await AuthService.getUserData();
+      if (!mounted) return;
+      setState(() {
+        _username = userData['name'] ?? userData['username'] ?? 'User';
+        _email = userData['email'] ?? 'user@example.com';
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -42,27 +53,31 @@ class _ProfilePageState extends State<ProfilePage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                radius: 28,
-                backgroundImage: NetworkImage(
-                    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop'),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text(_username,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800, fontSize: 18)),
-                    const SizedBox(height: 2),
-                    Text(_email,
-                        style: const TextStyle(color: AppColors.textSecondary)),
-                  ])),
-            ],
-          ),
+          if (_isLoading)
+            const Center(child: CircularProgressIndicator())
+          else
+            Row(
+              children: [
+                const CircleAvatar(
+                  radius: 28,
+                  backgroundImage: NetworkImage(
+                      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop'),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(_username,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800, fontSize: 18)),
+                      const SizedBox(height: 2),
+                      Text(_email,
+                          style:
+                              const TextStyle(color: AppColors.textSecondary)),
+                    ])),
+              ],
+            ),
           const SizedBox(height: 18),
           const Text('General', style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),

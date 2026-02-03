@@ -79,12 +79,33 @@ class AppRouter {
       // return _adaptive(AppShell(initialIndex: initialIndex), settings: settings);
 
       case AppRoutes.eventDetails:
-        return _adaptive(EventDetailPage(event: settings.arguments as Event),
+        return _adaptive(EventDetailPage(eventId: settings.arguments as String),
             settings: settings);
 
       case AppRoutes.payment:
-        return _adaptive(PaymentPage(event: settings.arguments as Event),
-            settings: settings);
+        final args = settings.arguments;
+        if (args is PaymentPageArgs) {
+          return _adaptive(
+              PaymentPage(
+                  event: args.event,
+                  bookingId: args.bookingId,
+                  personCount: args.personCount),
+              settings: settings);
+        } else if (args is Map<String, dynamic>) {
+          final event = args['event'] as Event;
+          final bookingId = args['bookingId'] as String?;
+          final personCount = (args['personCount'] as int?) ?? 1;
+          return _adaptive(
+              PaymentPage(
+                  event: event, bookingId: bookingId, personCount: personCount),
+              settings: settings);
+        } else if (args is Event) {
+          return _adaptive(PaymentPage(event: args, personCount: 1),
+              settings: settings);
+        } else {
+          throw ArgumentError(
+              'Payment route expects Event or PaymentPageArgs arguments');
+        }
 
       case AppRoutes.search:
         return _adaptive(const SearchPage(), settings: settings);
