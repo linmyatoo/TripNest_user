@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
@@ -157,7 +158,8 @@ class AuthService {
             token: token,
             userId: _firstNonEmpty(user, ['id', '_id', 'userId']) ?? 'unknown',
             username: _firstNonEmpty(user, ['username', 'name']) ?? 'User',
-            email: _firstNonEmpty(user, ['email']) ?? 'unknown@user',
+            // Use email from response, or fallback to the email used for login
+            email: _firstNonEmpty(user, ['email']) ?? email,
             role: _firstNonEmpty(user, ['role']) ?? 'user',
           );
         } else {
@@ -173,6 +175,346 @@ class AuthService {
         rethrow;
       }
       throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  /// Get current user profile from API (GET /api/profile/me)
+  static Future<Map<String, dynamic>> getProfileMe() async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/profile/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      print('=================================');
+      print('PROFILE ME RESPONSE');
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+      print('=================================');
+
+      if (response.statusCode >= 500) {
+        throw Exception('Server error. Please try again later.');
+      }
+
+      if (response.body.isEmpty) {
+        throw Exception('Empty response from server');
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (e) {
+        print('JSON Parse Error: $e');
+        throw Exception('Invalid server response');
+      }
+
+      if (response.statusCode == 200) {
+        return data;
+      } else {
+        throw Exception(data['message'] ?? 'Failed to load profile');
+      }
+    } catch (e) {
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  /// Get user profile by ID from API (GET /api/profile/:id)
+  static Future<Map<String, dynamic>> getProfileById(String userId) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/profile/$userId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      print('=================================');
+      print('PROFILE BY ID RESPONSE');
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+      print('=================================');
+
+      if (response.statusCode >= 500) {
+        throw Exception('Server error. Please try again later.');
+      }
+
+      if (response.body.isEmpty) {
+        throw Exception('Empty response from server');
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (e) {
+        print('JSON Parse Error: $e');
+        throw Exception('Invalid server response');
+      }
+
+      if (response.statusCode == 200) {
+        return data;
+      } else {
+        throw Exception(data['message'] ?? 'Failed to load profile');
+      }
+    } catch (e) {
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  /// Upload profile image (POST /api/profile/upload-image)
+  static Future<String?> uploadProfileImage(String filePath) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      final uri = Uri.parse('$baseUrl/profile/upload-image');
+      final request = http.MultipartRequest('POST', uri);
+
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(await http.MultipartFile.fromPath('image', filePath));
+
+      print('=================================');
+      print('UPLOADING PROFILE IMAGE');
+      print('File path: $filePath');
+      print('Endpoint: $uri');
+      print('=================================');
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('Upload Response Status: ${response.statusCode}');
+      print('Upload Response Body: ${response.body}');
+
+      // Handle empty response
+      if (response.body.isEmpty) {
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          print('Upload successful but no URL returned');
+          return null;
+        }
+        throw Exception(
+            'Server returned empty response (${response.statusCode})');
+      }
+
+      // Try to parse JSON response
+      try {
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          final data = jsonDecode(response.body);
+          // Return the image URL from response
+          return data['imageUrl'] ??
+              data['profilePictureUrl'] ??
+              data['url'] ??
+              data['data']?['url'];
+        } else {
+          final data = jsonDecode(response.body);
+          throw Exception(
+              data['message'] ?? data['error'] ?? 'Failed to upload image');
+        }
+      } catch (e) {
+        if (e is FormatException) {
+          // Server returned non-JSON response
+          print('Server returned non-JSON response: ${response.body}');
+          if (response.statusCode == 404) {
+            throw Exception(
+                'Image upload endpoint not found. Please check API.');
+          } else if (response.statusCode >= 500) {
+            throw Exception('Server error during image upload');
+          }
+          throw Exception('Invalid response from server');
+        }
+        rethrow;
+      }
+    } catch (e) {
+      print('Image upload error: $e');
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Failed to upload image: ${e.toString()}');
+    }
+  }
+
+  /// Update user profile (PATCH /api/profile/me)
+  /// Can include profile image as file path
+  static Future<Map<String, dynamic>> updateProfile({
+    String? fullName,
+    String? phone,
+    String? gender,
+    String? dateOfBirth,
+    String? profilePictureUrl,
+    String? imageFilePath,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      // If there's an image file, use multipart request
+      if (imageFilePath != null) {
+        return await _updateProfileWithImage(
+          token: token,
+          fullName: fullName,
+          phone: phone,
+          gender: gender,
+          dateOfBirth: dateOfBirth,
+          imageFilePath: imageFilePath,
+        );
+      }
+
+      // Otherwise, use regular JSON request
+      final Map<String, dynamic> body = {};
+      if (fullName != null) body['fullName'] = fullName;
+      if (phone != null) body['phone'] = phone;
+      if (gender != null) body['gender'] = gender;
+      if (dateOfBirth != null) body['dateOfBirth'] = dateOfBirth;
+      if (profilePictureUrl != null)
+        body['profilePictureUrl'] = profilePictureUrl;
+
+      final response = await http.patch(
+        Uri.parse('$baseUrl/profile/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(body),
+      );
+
+      print('=================================');
+      print('UPDATE PROFILE RESPONSE');
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+      print('=================================');
+
+      if (response.statusCode >= 500) {
+        throw Exception('Server error. Please try again later.');
+      }
+
+      if (response.body.isEmpty) {
+        if (response.statusCode == 200 || response.statusCode == 204) {
+          return {'success': true, 'message': 'Profile updated successfully'};
+        }
+        throw Exception('Empty response from server');
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (e) {
+        print('JSON Parse Error: $e');
+        throw Exception('Invalid server response');
+      }
+
+      if (response.statusCode == 200) {
+        return data;
+      } else {
+        throw Exception(
+            data['message'] ?? data['error'] ?? 'Failed to update profile');
+      }
+    } catch (e) {
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
+  /// Update profile with image using multipart request
+  static Future<Map<String, dynamic>> _updateProfileWithImage({
+    required String token,
+    String? fullName,
+    String? phone,
+    String? gender,
+    String? dateOfBirth,
+    required String imageFilePath,
+  }) async {
+    final uri = Uri.parse('$baseUrl/profile/me');
+    final request = http.MultipartRequest('PATCH', uri);
+
+    request.headers['Authorization'] = 'Bearer $token';
+
+    // Add text fields
+    if (fullName != null) request.fields['fullName'] = fullName;
+    if (phone != null) request.fields['phone'] = phone;
+    if (gender != null) request.fields['gender'] = gender;
+    if (dateOfBirth != null) request.fields['dateOfBirth'] = dateOfBirth;
+
+    // Add image file with proper content type
+    final filename = imageFilePath.split('/').last.toLowerCase();
+    String contentType = 'image/jpeg'; // default
+    if (filename.endsWith('.png')) {
+      contentType = 'image/png';
+    } else if (filename.endsWith('.gif')) {
+      contentType = 'image/gif';
+    } else if (filename.endsWith('.webp')) {
+      contentType = 'image/webp';
+    }
+
+    // Backend uses 'profilePicture' as the field name
+    request.files.add(await http.MultipartFile.fromPath(
+      'profilePicture',
+      imageFilePath,
+      contentType: MediaType.parse(contentType),
+      filename: 'profile_image.jpg',
+    ));
+
+    print('=================================');
+    print('UPDATE PROFILE WITH IMAGE');
+    print('File path: $imageFilePath');
+    print('Content-Type: $contentType');
+    print('Field name: profilePicture');
+    print('Fields: ${request.fields}');
+    print('=================================');
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    print('Response Status: ${response.statusCode}');
+    print('Response Body: ${response.body}');
+
+    if (response.statusCode >= 500) {
+      throw Exception('Server error. Please try again later.');
+    }
+
+    if (response.body.isEmpty) {
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return {'success': true, 'message': 'Profile updated successfully'};
+      }
+      throw Exception('Empty response from server');
+    }
+
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body);
+    } catch (e) {
+      print('JSON Parse Error: $e');
+      throw Exception('Invalid server response');
+    }
+
+    if (response.statusCode == 200) {
+      return data;
+    } else {
+      throw Exception(
+          data['message'] ?? data['error'] ?? 'Failed to update profile');
     }
   }
 

@@ -45,5 +45,7 @@
 		<true />
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true />
+		<key>NSFaceIDUsageDescription</key>
+		<string>TripNest uses Face ID to securely log you into your account.</string>
 	</dict>
 </plist>

@@ -17,13 +17,8 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   late int idx;
 
-  final pages = const [
-    HomePage(),
-    MyBookingPage(),
-    FavoritesPage(),
-    MessagesPage(),
-    ProfilePage(),
-  ];
+  // Key to force rebuild favorites page when tab is selected
+  int _favoritesRebuildKey = 0;
 
   @override
   void initState() {
@@ -31,22 +26,54 @@ class _AppShellState extends State<AppShell> {
     idx = widget.initialIndex;
   }
 
+  void _onTabSelected(int i) {
+    // If switching to favorites tab, force rebuild to refresh data
+    if (i == 2) {
+      _favoritesRebuildKey++;
+    }
+    setState(() => idx = i);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: pages[idx],
+      body: IndexedStack(
+        index: idx,
+        children: [
+          const HomePage(),
+          const MyBookingPage(),
+          FavoritesPage(key: ValueKey(_favoritesRebuildKey)),
+          const MessagesPage(),
+          const ProfilePage(),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         indicatorColor: AppColors.primary.withOpacity(.12),
         selectedIndex: idx,
-        onDestinationSelected: (i) => setState(() => idx = i),
+        onDestinationSelected: _onTabSelected,
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.receipt_long_outlined), selectedIcon: Icon(Icons.receipt_long), label: 'My Booking'),
-          NavigationDestination(icon: Icon(Icons.favorite_border), selectedIcon: Icon(Icons.favorite), label: 'Favorite'),
-          NavigationDestination(icon: Icon(Icons.message_outlined), selectedIcon: Icon(Icons.message), label: 'Message'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'My Profile'),
+          NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home),
+              label: 'Home'),
+          NavigationDestination(
+              icon: Icon(Icons.receipt_long_outlined),
+              selectedIcon: Icon(Icons.receipt_long),
+              label: 'My Booking'),
+          NavigationDestination(
+              icon: Icon(Icons.favorite_border),
+              selectedIcon: Icon(Icons.favorite),
+              label: 'Favorite'),
+          NavigationDestination(
+              icon: Icon(Icons.message_outlined),
+              selectedIcon: Icon(Icons.message),
+              label: 'Message'),
+          NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'My Profile'),
         ],
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:tripnest/src/core/services/auth_service.dart';
+import 'package:tripnest/src/core/services/security_service.dart';
 import 'package:tripnest/src/core/theme/app_colors.dart';
 import 'package:tripnest/src/core/widgets/settings_tile.dart';
 
@@ -20,6 +21,7 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   String _username = 'User';
   String _email = 'user@example.com';
+  String? _profileImage;
 
   bool _isLoading = true;
 
@@ -31,18 +33,51 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadUserData() async {
     try {
-      final userData = await AuthService.getUserData();
+      // Fetch profile using GET /api/profile/me
+      final response = await AuthService.getProfileMe();
       if (!mounted) return;
+
+      // API returns: {userId, fullName, phone, gender, profilePictureUrl, email}
+      final user = response['data'] ?? response['user'] ?? response;
+
+      // Extract values using the actual API field names
+      final name = user['fullName'] ?? user['name'] ?? user['username'];
+      String? image =
+          user['profilePictureUrl'] ?? user['profileImage'] ?? user['avatar'];
+
+      // Filter out placeholder URLs
+      if (image != null &&
+          (image.contains('placeholder') ||
+              image.contains('via.placeholder'))) {
+        image = null;
+      }
+
+      // Get email from API response
+      final email = user['email'];
+
       setState(() {
-        _username = userData['name'] ?? userData['username'] ?? 'User';
-        _email = userData['email'] ?? 'user@example.com';
+        _username = (name != null && name != 'Not Set') ? name : 'User';
+        _email = email ?? 'user@example.com';
+        _profileImage = image;
         _isLoading = false;
       });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
+    } catch (e) {
+      print('Error loading profile: $e');
+      // Fallback to local storage data if API fails
+      try {
+        final userData = await AuthService.getUserData();
+        if (!mounted) return;
+        setState(() {
+          _username = userData['name'] ?? userData['username'] ?? 'User';
+          _email = userData['email'] ?? 'user@example.com';
+          _isLoading = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -58,10 +93,17 @@ class _ProfilePageState extends State<ProfilePage> {
           else
             Row(
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 28,
-                  backgroundImage: NetworkImage(
-                      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop'),
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage:
+                      _profileImage != null && _profileImage!.isNotEmpty
+                          ? NetworkImage(_profileImage!)
+                          : const AssetImage('assets/images/avatar_jacob.jpg')
+                              as ImageProvider,
+                  onBackgroundImageError: (_, __) {
+                    // Handle image load error silently
+                  },
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -84,8 +126,15 @@ class _ProfilePageState extends State<ProfilePage> {
           SettingsTile(
               icon: Icons.edit_outlined,
               label: 'Edit Profile',
-              onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PersonalDataPage()))),
+              onTap: () async {
+                final updated = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                        builder: (_) => const PersonalDataPage()));
+                // Refresh profile data if it was updated
+                if (updated == true && mounted) {
+                  _loadUserData();
+                }
+              }),
           const SizedBox(height: 10),
           SettingsTile(
               icon: Icons.settings,
@@ -94,13 +143,13 @@ class _ProfilePageState extends State<ProfilePage> {
                   Navigator.of(context).pushNamed(ChangePasswordPage.route)),
           const SizedBox(height: 10),
           SettingsTile(
-              icon: Icons.settings,
+              icon: Icons.notifications_outlined,
               label: 'Notifications',
               onTap: () => Navigator.of(context)
                   .pushNamed(NotificationsSettingsPage.route)),
           const SizedBox(height: 10),
           SettingsTile(
-              icon: Icons.settings,
+              icon: Icons.security_outlined,
               label: 'Security',
               onTap: () => Navigator.of(context).pushNamed(SecurityPage.route)),
           const SizedBox(height: 18),
@@ -108,13 +157,13 @@ class _ProfilePageState extends State<ProfilePage> {
               style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
           SettingsTile(
-              icon: Icons.settings,
+              icon: Icons.policy_outlined,
               label: 'Legal and Policies',
               onTap: () =>
                   Navigator.of(context).pushNamed(PrivacyPolicyPage.route)),
           const SizedBox(height: 10),
           SettingsTile(
-              icon: Icons.settings,
+              icon: Icons.help_outline,
               label: 'Help & Support',
               onTap: () =>
                   Navigator.of(context).pushNamed(HelpCenterPage.route)),
@@ -131,6 +180,13 @@ class _ProfilePageState extends State<ProfilePage> {
               if (ok == true && mounted) {
                 // Perform logout
                 await AuthService.logout();
+
+                // Only clear saved credentials if Remember Password is disabled
+                final rememberEnabled =
+                    await SecurityService.isRememberPasswordEnabled();
+                if (!rememberEnabled) {
+                  await SecurityService.clearSavedCredentials();
+                }
 
                 // Navigate to login and remove all previous routes
                 Navigator.pushNamedAndRemoveUntil(

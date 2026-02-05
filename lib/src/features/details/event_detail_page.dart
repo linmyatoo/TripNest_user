@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app_router.dart';
 import '../../core/services/event_service.dart';
+import '../../core/services/favorite_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/event.dart';
@@ -19,11 +20,45 @@ class _EventDetailPageState extends State<EventDetailPage> {
   bool _isLoading = true;
   String? _errorMessage;
   int _personCount = 1;
+  bool _isFavorite = false;
 
   @override
   void initState() {
     super.initState();
     _loadEvent();
+    _checkFavoriteStatus();
+  }
+
+  Future<void> _checkFavoriteStatus() async {
+    final isFav = await FavoriteService.isFavorite(widget.eventId);
+    if (mounted) {
+      setState(() {
+        _isFavorite = isFav;
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    print('Toggling favorite for event ID: ${widget.eventId}'); // Debug log
+    final newStatus = await FavoriteService.toggleFavorite(widget.eventId);
+    print('New favorite status: $newStatus'); // Debug log
+
+    // Verify it was saved
+    final savedIds = await FavoriteService.getFavoriteIds();
+    print('Current saved favorite IDs: $savedIds'); // Debug log
+
+    if (mounted) {
+      setState(() {
+        _isFavorite = newStatus;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(newStatus ? 'Added to favorites' : 'Removed from favorites'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _loadEvent() async {
@@ -102,7 +137,11 @@ class _EventDetailPageState extends State<EventDetailPage> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
             onPressed: () => Navigator.pop(context)),
         actions: [
-          IconButton(icon: const Icon(Icons.favorite_border), onPressed: () {})
+          IconButton(
+            icon: Icon(_isFavorite ? Icons.favorite : Icons.favorite_border,
+                color: _isFavorite ? Colors.red : null),
+            onPressed: _toggleFavorite,
+          )
         ],
       ),
       bottomNavigationBar: Padding(

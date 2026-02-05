@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/services/security_service.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/primary_button.dart';
 
@@ -17,12 +18,112 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _canUseBiometric = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+    _checkBiometricAvailability();
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final rememberEnabled = await SecurityService.isRememberPasswordEnabled();
+    if (rememberEnabled) {
+      final savedEmail = await SecurityService.getSavedEmail();
+      final savedPassword = await SecurityService.getSavedPassword();
+
+      if (mounted && savedEmail != null) {
+        setState(() {
+          _emailController.text = savedEmail;
+          if (savedPassword != null) {
+            _passwordController.text = savedPassword;
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> _checkBiometricAvailability() async {
+    final canUse = await SecurityService.canUseBiometricLogin();
+    if (mounted) {
+      setState(() {
+        _canUseBiometric = canUse;
+      });
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final authenticated = await SecurityService.authenticateWithBiometrics(
+        reason: 'Authenticate to login to TripNest',
+      );
+
+      if (!authenticated) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          _showError('Authentication failed');
+        }
+        return;
+      }
+
+      // Get saved credentials
+      final email = await SecurityService.getSavedEmail();
+      final password = await SecurityService.getSavedPassword();
+
+      if (email == null || password == null) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          _showError(
+              'No saved credentials found. Please login with email and password.');
+        }
+        return;
+      }
+
+      // Login with saved credentials
+      final response = await AuthService.login(
+        email: email,
+        password: password,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? 'Login successful'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        Navigator.pushReplacementNamed(context, '/app');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        _showError(e.toString().replaceAll('Exception: ', ''));
+      }
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -41,10 +142,16 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+
       final response = await AuthService.login(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        email: email,
+        password: password,
       );
+
+      // Save credentials if remember password is enabled
+      await SecurityService.saveCredentials(email, password);
 
       if (mounted) {
         setState(() {
@@ -153,6 +260,20 @@ class _LoginPageState extends State<LoginPage> {
                 label: _isLoading ? 'Signing In...' : 'Sign In',
                 onPressed: _isLoading ? null : _handleLogin,
               ),
+              if (_canUseBiometric) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _handleBiometricLogin,
+                  icon: const Icon(Icons.face),
+                  label: const Text('Login with Face ID / Biometrics'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 18),
               Row(children: const [
                 Expanded(child: Divider()),

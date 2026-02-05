@@ -31,6 +31,19 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadUserName() async {
     try {
+      // First try to get name from API
+      final profileData = await AuthService.getProfileMe();
+      if (profileData != null && mounted) {
+        final fullName = profileData['fullName'] as String?;
+        if (fullName != null && fullName.isNotEmpty) {
+          setState(() {
+            _displayName = fullName;
+          });
+          return;
+        }
+      }
+
+      // Fallback to local storage if API fails
       final userData = await AuthService.getUserData();
       final name = userData['username'];
       if (!mounted || name == null || name.isEmpty) return;

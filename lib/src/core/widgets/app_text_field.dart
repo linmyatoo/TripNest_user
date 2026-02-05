@@ -11,6 +11,7 @@ class AppTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final String? helperText;
   final String? errorText;
+  final bool readOnly;
 
   const AppTextField({
     super.key,
@@ -23,6 +24,7 @@ class AppTextField extends StatelessWidget {
     this.textInputAction,
     this.helperText,
     this.errorText,
+    this.readOnly = false,
   });
 
   @override
@@ -32,18 +34,31 @@ class AppTextField extends StatelessWidget {
       obscureText: obscure,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
-      style: const TextStyle(fontSize: 16),
-      decoration: const InputDecoration(
+      readOnly: readOnly,
+      enableInteractiveSelection: !readOnly,
+      canRequestFocus: !readOnly,
+      style: TextStyle(
+        fontSize: 16,
+        color: readOnly ? Colors.grey[700] : Colors.black,
+      ),
+      decoration: InputDecoration(
         filled: true,
-        fillColor: Colors.white,
-        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        enabledBorder: OutlineInputBorder(
+        fillColor: readOnly ? const Color(0xFFF3F4F6) : Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        enabledBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
           borderSide: BorderSide(color: Color(0xFFD1D5DB)),
         ),
         focusedBorder: OutlineInputBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(
+              color: readOnly ? const Color(0xFFD1D5DB) : AppColors.primary,
+              width: 1.6),
+        ),
+        disabledBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: AppColors.primary, width: 1.6),
+          borderSide: BorderSide(color: Color(0xFFD1D5DB)),
         ),
       ).copyWith(
         hintText: hint,

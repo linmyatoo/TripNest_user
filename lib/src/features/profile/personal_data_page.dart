@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/services/security_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/primary_button.dart';
@@ -25,13 +26,17 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
   final nameCtrl = TextEditingController();
   final emailCtrl = TextEditingController();
   final phoneCtrl = TextEditingController();
-  final dobCtrl = TextEditingController(text: 'November 24, 2000');
+  final dobCtrl = TextEditingController();
+
+  String? _selectedGender;
 
   final _picker = ImagePicker();
   File? _avatar; // local preview image
+  String? _profileImageUrl; // profile image from API
   static const int _maxBytes = 1024 * 1024; // 1 MB
 
   bool _isLoading = true;
+  bool _isSaving = false;
   String? _userId; // Store user ID for future use (e.g., updating profile)
 
   @override
@@ -46,24 +51,133 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
     });
 
     try {
-      final response = await AuthService.getUserProfile();
-      if (response['success'] == true && response['user'] != null) {
-        final user = response['user'];
-        setState(() {
-          _userId = user['_id'];
-          nameCtrl.text = user['username'] ?? '';
-          emailCtrl.text = user['email'] ?? '';
-          phoneCtrl.text = user['phone_number'] ?? '';
-          _isLoading = false;
-        });
-        print('Profile loaded for user ID: $_userId');
+      // Get email from local storage since API doesn't return it
+      final localData = await AuthService.getUserData();
+      final savedEmail = await SecurityService.getSavedEmail();
+
+      // Fetch profile using GET /api/profile/me
+      final response = await AuthService.getProfileMe();
+      final user = response['data'] ?? response['user'] ?? response;
+
+      // Extract profile image URL
+      String? imageUrl =
+          user['profilePictureUrl'];
+
+      print('=== PROFILE IMAGE DEBUG ===');
+      print('Raw profilePictureUrl: ${user['profilePictureUrl']}');
+      print('Raw profileImage: ${user['profileImage']}');
+      print('Raw avatar: ${user['avatar']}');
+      print('Selected imageUrl: $imageUrl');
+
+      // Filter out placeholder URLs
+      if (imageUrl != null &&
+          (imageUrl.contains('placeholder') ||
+              imageUrl.contains('via.placeholder'))) {
+        print('Filtered out placeholder URL');
+        imageUrl = null;
       }
+
+      print('Final imageUrl: $imageUrl');
+      print('===========================');
+
+      // Debug email
+      print('=== EMAIL DEBUG ===');
+      print('API email: ${user['email']}');
+      print('Local email: ${localData['email']}');
+      print('Saved email: $savedEmail');
+      print('===================');
+
+      // Determine email - priority: API > saved credentials > local storage
+      String? emailToUse = user['email'];
+      if (emailToUse == null ||
+          emailToUse.isEmpty ||
+          emailToUse == 'unknown@user') {
+        emailToUse = savedEmail;
+      }
+      if (emailToUse == null || emailToUse.isEmpty) {
+        final localEmail = localData['email'];
+        if (localEmail != null && localEmail != 'unknown@user') {
+          emailToUse = localEmail;
+        }
+      }
+
+      setState(() {
+        _userId = user['userId'] ?? user['_id'];
+
+        // Full Name
+        nameCtrl.text =
+            (user['fullName'] != null && user['fullName'] != 'Not Set')
+                ? user['fullName']
+                : (user['username'] ?? user['name'] ?? '');
+
+        // Email (from API or saved credentials - read only)
+        emailCtrl.text = emailToUse ?? '';
+
+        // Phone
+        phoneCtrl.text = (user['phone'] != null && user['phone'] != 'Not Set')
+            ? user['phone']
+            : (user['phone_number'] ?? '');
+
+        // Gender
+        final gender = user['gender'];
+        if (gender != null &&
+            gender != 'Not Set' &&
+            gender.toString().isNotEmpty) {
+          _selectedGender = gender;
+        } else {
+          _selectedGender = null;
+        }
+
+        // Date of Birth - parse and format without time
+        if (user['dateOfBirth'] != null && user['dateOfBirth'] != 'Not Set') {
+          dobCtrl.text = _formatDateString(user['dateOfBirth']);
+        } else if (user['dob'] != null && user['dob'] != 'Not Set') {
+          dobCtrl.text = _formatDateString(user['dob']);
+        }
+
+        // Profile Image
+        _profileImageUrl = imageUrl;
+
+        _isLoading = false;
+      });
+      print('Profile loaded for user ID: $_userId');
     } catch (e) {
       if (mounted) {
         _snack(
             'Error loading profile: ${e.toString().replaceAll('Exception: ', '')}');
         setState(() {
           _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await AuthService.updateProfile(
+        fullName: nameCtrl.text.isNotEmpty ? nameCtrl.text : null,
+        phone: phoneCtrl.text.isNotEmpty ? phoneCtrl.text : null,
+        gender: _selectedGender,
+        dateOfBirth: dobCtrl.text.isNotEmpty ? dobCtrl.text : null,
+        imageFilePath: _avatar?.path,
+      );
+
+      if (mounted) {
+        _snack('Profile updated successfully!');
+        Navigator.pop(context, true); // Return true to indicate update
+      }
+    } catch (e) {
+      if (mounted) {
+        _snack('Error: ${e.toString().replaceAll('Exception: ', '')}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
         });
       }
     }
@@ -101,6 +215,37 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
         'November',
         'December'
       ][m - 1];
+
+  /// Format date string to "Month Day, Year" format without time
+  String _formatDateString(String dateStr) {
+    try {
+      // Try to parse ISO format or other common formats
+      final date = DateTime.tryParse(dateStr);
+      if (date != null) {
+        return '${_monthName(date.month)} ${date.day}, ${date.year}';
+      }
+      // If it's already in a readable format without time, return as is
+      // But strip any time portion if present (after 'T' or space followed by numbers)
+      final cleanDate = dateStr.split('T').first.split(' ').first;
+      // If it looks like YYYY-MM-DD, parse and format
+      final parts = cleanDate.split('-');
+      if (parts.length == 3) {
+        final year = int.tryParse(parts[0]);
+        final month = int.tryParse(parts[1]);
+        final day = int.tryParse(parts[2]);
+        if (year != null &&
+            month != null &&
+            day != null &&
+            month >= 1 &&
+            month <= 12) {
+          return '${_monthName(month)} $day, $year';
+        }
+      }
+      return dateStr; // Return original if can't parse
+    } catch (e) {
+      return dateStr; // Return original on error
+    }
+  }
 
   // ---------- Image compression (≤ 1 MB), pure Dart ----------
   Future<File?> _ensureUnder1MB(File file) async {
@@ -226,13 +371,54 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
     );
   }
 
-  @override
+  Widget _buildAvatar() {
+    // Priority: local file > API image > default asset
+    if (_avatar != null) {
+      return CircleAvatar(
+        radius: 52,
+        backgroundColor: Colors.grey[200],
+        backgroundImage: FileImage(_avatar!),
+      );
+    } else if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          _profileImageUrl!,
+          width: 104,
+          height: 104,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              width: 104,
+              height: 104,
+              color: Colors.grey[200],
+              child: const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            print('Error loading profile image: $error');
+            return CircleAvatar(
+              radius: 52,
+              backgroundColor: Colors.grey[200],
+              backgroundImage:
+                  const AssetImage('assets/images/avatar_jacob.jpg'),
+            );
+          },
+        ),
+      );
+    } else {
+      return CircleAvatar(
+        radius: 52,
+        backgroundColor: Colors.grey[200],
+        backgroundImage: const AssetImage('assets/images/avatar_jacob.jpg'),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final avatarProvider = _avatar != null
-        ? FileImage(_avatar!)
-        : const AssetImage('assets/images/avatar_jacob.jpg') as ImageProvider;
-
     return Scaffold(
       appBar: AppBar(
         leading: const BackButton(),
@@ -256,8 +442,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        CircleAvatar(
-                            radius: 52, backgroundImage: avatarProvider),
+                        _buildAvatar(),
                         // Pencil button at bottom-right
                         Positioned(
                           right: -2,
@@ -292,6 +477,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                     hint: 'harry3435@gmail.com',
                     controller: emailCtrl,
                     keyboardType: TextInputType.emailAddress,
+                    readOnly: true,
                   ),
                   const SizedBox(height: 16),
                   const Text('Phone Number',
@@ -330,16 +516,42 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                   const Text('Gender',
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
-                  const AppTextField(hint: ''),
+                  DropdownButtonFormField<String>(
+                    value: _selectedGender,
+                    hint: const Text('Select Gender'),
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.primary),
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'Male', child: Text('Male')),
+                      DropdownMenuItem(value: 'Female', child: Text('Female')),
+                      DropdownMenuItem(value: 'Other', child: Text('Other')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedGender = value;
+                      });
+                    },
+                  ),
                   const SizedBox(height: 22),
                   PrimaryButton(
-                    label: 'Save Canges', // (keeping your Figma label)
-                    onPressed: () {
-                      // Navigate back to Profile page
-                      Navigator.pop(context);
-                      // Optionally show feedback
-                      // _snack('Profile updated (mock)');
-                    },
+                    label: _isSaving ? 'Saving...' : 'Save Changes',
+                    onPressed: _isSaving ? null : _saveProfile,
                   ),
                 ],
               ),
