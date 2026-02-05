@@ -33,7 +33,7 @@ class _HomePageState extends State<HomePage> {
     try {
       // First try to get name from API
       final profileData = await AuthService.getProfileMe();
-      if (profileData != null && mounted) {
+      if (mounted) {
         final fullName = profileData['fullName'] as String?;
         if (fullName != null && fullName.isNotEmpty) {
           setState(() {

@@ -517,7 +517,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _selectedGender,
+                    initialValue: _selectedGender,
                     hint: const Text('Select Gender'),
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(
