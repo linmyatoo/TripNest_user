@@ -26,7 +26,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
             child: Image.network(
               'https://images.unsplash.com/photo-1508997449629-303059a039c0?q=80&w=1200&auto=format&fit=crop',
               fit: BoxFit.cover,
-              color: Colors.black.withOpacity(.35),
+              color: Colors.black.withValues(alpha: .35),
               colorBlendMode: BlendMode.darken,
               errorBuilder: (context, error, stackTrace) {
                 return Container(
@@ -47,7 +47,7 @@ class _ChatbotPageState extends State<ChatbotPage> {
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.95),
+                  color: Colors.white.withValues(alpha: .95),
                   borderRadius: BorderRadius.circular(18),
                 ),
                 padding: const EdgeInsets.all(16),

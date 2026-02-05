@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../core/widgets/dropdown_form_field.dart';
+
 import '../../app_router.dart';
+import '../../core/widgets/dropdown_form_field.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -43,7 +44,7 @@ class _SearchPageState extends State<SearchPage> {
             width: boxWidth,
             child: Container(
               decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.92),
+                  color: Colors.white.withValues(alpha: .92),
                   borderRadius: BorderRadius.circular(18)),
               padding: const EdgeInsets.all(16),
               child: Column(

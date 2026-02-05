@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../app_router.dart';
 import '../../core/services/booking_service.dart';
+import '../../core/services/local_notification_service.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/event.dart';
 
@@ -138,15 +140,38 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   Widget _radio(int index, String label) {
+    final isSelected = method == index;
     return InkWell(
       onTap: () => setState(() => method = index),
-      child: Row(children: [
-        Radio<int>(
-            value: index,
-            groupValue: method,
-            onChanged: (v) => setState(() => method = v!)),
-        Text(label),
-      ]),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color:
+                      isSelected ? AppColors.primary : const Color(0xFFD1D5DB),
+                  width: 2,
+                ),
+                color: isSelected ? AppColors.primary : Colors.transparent,
+              ),
+              child: isSelected
+                  ? const Center(
+                      child: Icon(Icons.check, size: 14, color: Colors.white),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -159,7 +184,7 @@ class _PaymentPageState extends State<PaymentPage> {
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: Image.network(
-            e.imageUrl,
+            e.primaryImage,
             width: 56,
             height: 56,
             fit: BoxFit.cover,
@@ -195,18 +220,28 @@ class _PaymentPageState extends State<PaymentPage> {
   Future<void> _handlePayNow() async {
     final event = widget.event;
     final personCount = widget.personCount <= 0 ? 1 : widget.personCount;
-    final ticketFee = event.priceBaht * personCount;
-    final discount = ticketFee * 0.1;
-    const tax = 10.0;
-    final total = ticketFee - discount + tax;
 
     setState(() => _isSubmitting = true);
 
     try {
-      final booking = await BookingService.createBooking(
+      await BookingService.createBooking(
         eventId: event.id,
         ticketCounts: personCount,
       );
+
+      // Trigger local notification with sound and vibration
+      print('📢 Triggering notification for: ${event.title}');
+      try {
+        await LocalNotificationService.showBookingNotification(
+          bookingId: event.id,
+          eventTitle: event.title,
+          ticketCount: personCount,
+          totalPrice: (event.priceBaht * personCount).toDouble(),
+        );
+        print('✅ Notification triggered successfully');
+      } catch (notifError) {
+        print('❌ Notification error: $notifError');
+      }
 
       if (!mounted) return;
       setState(() => _isSubmitting = false);

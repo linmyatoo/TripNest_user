@@ -92,25 +92,3 @@ class _FAQTile extends StatelessWidget {
     );
   }
 }
-
-class _ArrowFAQ extends StatelessWidget {
-  final String question;
-  const _ArrowFAQ({required this.question});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 58,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-          color: Color(0xFFF4F6F8), borderRadius: BorderRadius.circular(12)),
-      child: Row(children: [
-        Expanded(
-            child: Text(question,
-                style: const TextStyle(fontWeight: FontWeight.w600))),
-        const Icon(Icons.chevron_right_rounded),
-      ]),
-    );
-  }
-}

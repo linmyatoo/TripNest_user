@@ -145,7 +145,8 @@ class _Bubble extends StatelessWidget {
           Text(text, style: TextStyle(color: textColor)),
           const SizedBox(height: 4),
           Text(time,
-              style: TextStyle(color: textColor.withOpacity(.8), fontSize: 11)),
+              style: TextStyle(
+                  color: textColor.withValues(alpha: .8), fontSize: 11)),
         ]),
       ),
     );

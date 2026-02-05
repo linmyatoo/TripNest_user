@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app_router.dart';
 import '../../core/services/event_service.dart';
 import '../../core/services/favorite_service.dart';
+import '../../core/services/review_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/event.dart';
@@ -21,12 +24,86 @@ class _EventDetailPageState extends State<EventDetailPage> {
   String? _errorMessage;
   int _personCount = 1;
   bool _isFavorite = false;
+  final PageController _photoController = PageController();
+  int _currentPhotoIndex = 0;
+  Timer? _autoSlideTimer;
+  List<Review> _reviews = [];
+  double? _averageRating;
 
   @override
   void initState() {
     super.initState();
     _loadEvent();
     _checkFavoriteStatus();
+    _loadReviews();
+    _loadAverageRating();
+  }
+
+  Widget _photoCarousel(Event event) {
+    final photos = event.photoGallery;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Stack(
+        children: [
+          SizedBox(
+            height: 260,
+            width: double.infinity,
+            child: PageView.builder(
+              controller: _photoController,
+              onPageChanged: (index) {
+                setState(() => _currentPhotoIndex = index);
+              },
+              itemCount: photos.length,
+              itemBuilder: (_, index) {
+                final url = photos[index];
+                return Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.image_not_supported,
+                          color: Colors.grey, size: 60),
+                    );
+                  },
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      color: Colors.grey[200],
+                      child: const Center(child: CircularProgressIndicator()),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          if (photos.length > 1)
+            Positioned(
+              bottom: 16,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(photos.length, (index) {
+                  final isActive = index == _currentPhotoIndex;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    height: 6,
+                    width: isActive ? 18 : 8,
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  );
+                }),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _checkFavoriteStatus() async {
@@ -34,6 +111,24 @@ class _EventDetailPageState extends State<EventDetailPage> {
     if (mounted) {
       setState(() {
         _isFavorite = isFav;
+      });
+    }
+  }
+
+  Future<void> _loadReviews() async {
+    final reviews = await ReviewService.getEventReviews(widget.eventId);
+    if (mounted) {
+      setState(() {
+        _reviews = reviews;
+      });
+    }
+  }
+
+  Future<void> _loadAverageRating() async {
+    final rating = await ReviewService.getEventAverageRating(widget.eventId);
+    if (mounted) {
+      setState(() {
+        _averageRating = rating;
       });
     }
   }
@@ -61,6 +156,139 @@ class _EventDetailPageState extends State<EventDetailPage> {
     }
   }
 
+  Future<void> _showFullImage(String url) async {
+    final photos = _event?.photoGallery ?? [url];
+    final initialIndex = photos.indexOf(url);
+    final controller = PageController(
+      initialPage: initialIndex >= 0 ? initialIndex : 0,
+    );
+    int currentIndex = controller.initialPage;
+
+    await showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.9),
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return GestureDetector(
+              onTap: () => Navigator.of(dialogContext).pop(),
+              child: Stack(
+                children: [
+                  PageView.builder(
+                    controller: controller,
+                    onPageChanged: (index) {
+                      setStateDialog(() => currentIndex = index);
+                    },
+                    itemCount: photos.length,
+                    itemBuilder: (_, index) {
+                      final photoUrl = photos[index];
+                      return Center(
+                        child: InteractiveViewer(
+                          child: Image.network(
+                            photoUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(Icons.image_not_supported,
+                                  color: Colors.white, size: 60);
+                            },
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return const CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2);
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  Positioned(
+                    top: 24,
+                    right: 24,
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ),
+                  if (photos.length > 1)
+                    Positioned(
+                      bottom: 24,
+                      left: 0,
+                      right: 0,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(photos.length, (index) {
+                          final isActive = index == currentIndex;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            width: isActive ? 18 : 8,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: isActive
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildReviewsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_averageRating != null) ...[
+          Row(
+            children: [
+              ...List.generate(5, (i) {
+                final rating = _averageRating!;
+                IconData icon;
+                if (i < rating.floor()) {
+                  icon = Icons.star; // Full star
+                } else if (i < rating && rating - i >= 0.5) {
+                  icon = Icons.star_half; // Half star
+                } else {
+                  icon = Icons.star_border; // Empty star
+                }
+                return Icon(icon, color: Colors.amber, size: 20);
+              }),
+              const SizedBox(width: 8),
+              Text(
+                _averageRating!.toStringAsFixed(1),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                ' (${_reviews.length} reviews)',
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (_reviews.isEmpty)
+          const Text('No reviews yet.',
+              style: TextStyle(color: AppColors.muted))
+        else
+          ...(_reviews.take(3).map((review) => _ReviewTile(review: review))),
+      ],
+    );
+  }
+
   Future<void> _loadEvent() async {
     setState(() {
       _isLoading = true;
@@ -72,13 +300,52 @@ class _EventDetailPageState extends State<EventDetailPage> {
       setState(() {
         _event = event;
         _isLoading = false;
+        _currentPhotoIndex = 0;
       });
+      _restartAutoSlide();
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
       });
     }
+  }
+
+  void _restartAutoSlide() {
+    _autoSlideTimer?.cancel();
+    final photos = _event?.photoGallery ?? [];
+    if (photos.length <= 1) {
+      return;
+    }
+
+    if (_photoController.hasClients) {
+      _photoController.jumpToPage(0);
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_photoController.hasClients) {
+          _photoController.jumpToPage(0);
+        }
+      });
+    }
+
+    _autoSlideTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!_photoController.hasClients) return;
+      final photosLength = _event?.photoGallery.length ?? 0;
+      if (photosLength <= 1) return;
+      final next = (_currentPhotoIndex + 1) % photosLength;
+      _photoController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoSlideTimer?.cancel();
+    _photoController.dispose();
+    super.dispose();
   }
 
   @override
@@ -130,7 +397,6 @@ class _EventDetailPageState extends State<EventDetailPage> {
     final event = _event!;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         leading: IconButton(
@@ -185,32 +451,9 @@ class _EventDetailPageState extends State<EventDetailPage> {
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // hero image
-          ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(bottom: Radius.circular(18)),
-            child: Image.network(
-              event.imageUrl,
-              height: 260,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  height: 260,
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.image_not_supported,
-                      color: Colors.grey, size: 60),
-                );
-              },
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  height: 260,
-                  color: Colors.grey[200],
-                  child: const Center(child: CircularProgressIndicator()),
-                );
-              },
-            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: _photoCarousel(event),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -236,7 +479,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
               const Text('Reviews',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              const Text('Reviews will appear here... See More...'),
+              _buildReviewsSection(),
               const SizedBox(height: 16),
               const Text('Gallery',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
@@ -245,39 +488,40 @@ class _EventDetailPageState extends State<EventDetailPage> {
                 height: 72,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: event.gallery.isEmpty ? 3 : event.gallery.length,
+                  itemCount: event.photoGallery.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 10),
                   itemBuilder: (_, i) {
-                    final url = (event.gallery.isEmpty)
-                        ? event.imageUrl
-                        : event.gallery[i];
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.network(
-                        url,
-                        width: 100,
-                        height: 72,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            width: 100,
-                            height: 72,
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.image_not_supported,
-                                color: Colors.grey, size: 30),
-                          );
-                        },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            width: 100,
-                            height: 72,
-                            color: Colors.grey[200],
-                            child: const Center(
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2)),
-                          );
-                        },
+                    final url = event.photoGallery[i];
+                    return GestureDetector(
+                      onTap: () => _showFullImage(url),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.network(
+                          url,
+                          width: 100,
+                          height: 72,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 100,
+                              height: 72,
+                              color: Colors.grey[300],
+                              child: const Icon(Icons.image_not_supported,
+                                  color: Colors.grey, size: 30),
+                            );
+                          },
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              width: 100,
+                              height: 72,
+                              color: Colors.grey[200],
+                              child: const Center(
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2)),
+                            );
+                          },
+                        ),
                       ),
                     );
                   },
@@ -302,7 +546,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border.withOpacity(0.4)),
+                  border: Border.all(
+                      color: AppColors.border.withValues(alpha: 0.4)),
                 ),
                 child: Row(
                   children: [
@@ -358,7 +603,71 @@ class _CounterButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon,
-            color: Colors.white.withOpacity(onTap == null ? 0.4 : 1), size: 18),
+            color: Colors.white.withValues(alpha: onTap == null ? 0.4 : 1),
+            size: 18),
+      ),
+    );
+  }
+}
+
+class _ReviewTile extends StatelessWidget {
+  final Review review;
+  const _ReviewTile({required this.review});
+
+  @override
+  Widget build(BuildContext context) {
+    final date = review.createdAt;
+    final dateStr = '${date.day}/${date.month}/${date.year}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.primary,
+                child: Icon(Icons.person, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('User',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14)),
+                    Text(dateStr,
+                        style: const TextStyle(
+                            color: AppColors.muted, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Row(
+                children: List.generate(5, (i) {
+                  return Icon(
+                    i < review.rating ? Icons.star : Icons.star_border,
+                    color: Colors.amber,
+                    size: 16,
+                  );
+                }),
+              ),
+            ],
+          ),
+          if (review.comment != null && review.comment!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(review.comment!,
+                style: const TextStyle(color: AppColors.textSecondary)),
+          ],
+        ],
       ),
     );
   }

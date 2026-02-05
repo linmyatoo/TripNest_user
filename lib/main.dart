@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+
 import 'src/app_router.dart';
+import 'src/core/services/local_notification_service.dart';
 import 'src/core/theme/app_colors.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await LocalNotificationService.initialize();
+  await LocalNotificationService.requestPermissions();
   runApp(const TripNestApp());
 }
 

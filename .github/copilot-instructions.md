@@ -1,0 +1,26 @@
+# TripNest AI Guidance
+
+- **Architecture Overview**
+  - App entry (`main.dart`) builds `TripNestApp`, wires theming via [lib/src/core/theme/app_colors.dart](lib/src/core/theme/app_colors.dart) and routes through [lib/src/app_router.dart](lib/src/app_router.dart).
+  - Bottom navigation shell lives in [lib/src/app_shell.dart](lib/src/app_shell.dart) and is the only place tabs should be added or reordered; use `AppRoutes` constants for navigation instead of raw strings.
+  - Features are organized by domain under [lib/src/features](lib/src/features); prefer keeping data fetch + UI in the same feature folder and reuse shared widgets from [lib/src/widgets](lib/src/widgets).
+- **Data & Services**
+  - All network calls hit `https://naylinhtet.me/api`; reuse existing service classes in [lib/src/core/services](lib/src/core/services) so auth headers, logging, and error handling stay consistent.
+  - `AuthService` + `SharedPreferences` store tokens/user metadata; before adding new secure storage, check existing helpers such as `getToken()` and `logout()` in [lib/src/core/services/auth_service.dart](lib/src/core/services/auth_service.dart).
+  - `Event` parsing already supports `eventPhotoUrl` arrays and exposes `photoGallery`/`primaryImage` ([lib/src/models/event.dart](lib/src/models/event.dart)); always rely on those getters when rendering thumbnails to avoid mismatched placeholders.
+  - Bookings/favorites use optimistic local caches (`BookingService`, `FavoriteService`); when adding new persistence, follow the pattern of syncing remote updates but treating local storage as source of truth.
+- **UI Patterns**
+  - Prefer using shared widgets (`PrimaryButton`, `EventCard`, etc.) and extend them instead of duplicating stylings; colors/typography should reference `AppColors`.
+  - When you need image carousels or dynamic galleries, copy the `PageView` + indicator pattern from [lib/src/features/details/event_detail_page.dart](lib/src/features/details/event_detail_page.dart) which already handles auto-slide timers and fallbacks.
+  - Use `PopScope` for back-navigation guards (see [lib/src/features/home/home_page.dart](lib/src/features/home/home_page.dart#L82-L131)) and `PageController`/`ValueKey` trick from `AppShell` to force tab refreshes.
+  - Do not introduce `print` statements in production UI; if logging is required, wrap them in `if (kDebugMode)` or switch to `debugPrint` so we can eventually satisfy the `flutter_lints` rule.
+- **Workflows & Tooling**
+  - Run `flutter pub get` after touching `pubspec*` and `flutter analyze` before submitting; treat current lints (avoid_print, prefer_const_constructors, use_build_context_synchronously) as TODOs to fix or suppress explicitly.
+  - Use realistic data flows: for offline demos rely on `mockEvents` ([lib/src/data/mock_events.dart](lib/src/data/mock_events.dart)), but prefer real services in new code.
+  - Keep navigation additions centralized: declare new route strings in `AppRoutes`, add case handling in `AppRouter.onGenerateRoute`, and expose `static route` strings on each page (see `HelpCenterPage.route`).
+  - Assets live under [assets/images](assets/images) and [assets/icons](assets/icons); update `pubspec.yaml` if you add new folders.
+  - When creating user-facing lists (bookings, favorites, notifications) prefer pull-to-refresh via `RefreshIndicator` and preserve state with `IndexedStack` or `ValueKey` the way `FavoritesPage` does ([lib/src/features/favorites/favorites_page.dart](lib/src/features/favorites/favorites_page.dart)).
+- **Testing & Debugging Tips**
+  - Use `flutter run -d <device>` for manual validation; there are currently no widget tests besides the template in [test/widget_test.dart](test/widget_test.dart) so add targeted tests alongside new complex widgets.
+  - Network-heavy pages should handle empty/error states similar to `HomePage` and `EventDetailPage`; reuse those patterns for consistency.
+  - When working with authentication flows, remember that biometric/remember-me toggles rely on `SecurityService` ([lib/src/core/services/security_service.dart](lib/src/core/services/security_service.dart)); mock these for unit tests by injecting wrappers rather than duplicating logic.

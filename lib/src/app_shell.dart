@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+
 import 'core/theme/app_colors.dart';
-import 'features/home/home_page.dart';
 import 'features/booking/my_booking_page.dart';
 import 'features/favorites/favorites_page.dart';
+import 'features/home/home_page.dart';
 import 'features/messages/messages_page.dart';
 import 'features/profile/profile_page.dart';
 
@@ -50,7 +51,7 @@ class _AppShellState extends State<AppShell> {
       bottomNavigationBar: NavigationBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: AppColors.primary.withOpacity(.12),
+        indicatorColor: AppColors.primary.withValues(alpha: .12),
         selectedIndex: idx,
         onDestinationSelected: _onTabSelected,
         destinations: const [

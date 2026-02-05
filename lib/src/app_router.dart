@@ -7,6 +7,7 @@ import 'app_shell.dart';
 import 'features/auth/forgot_password_page.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/sign_up_page.dart';
+import 'features/booking/my_booking_page.dart';
 import 'features/booking/review_page.dart';
 import 'features/chatbot/chatbot_page.dart';
 import 'features/details/event_detail_page.dart';
@@ -32,6 +33,7 @@ class AppRoutes {
   static const searchResults = '/search_results';
   static const review = '/review';
   static const chatbot = '/chatbot';
+  static const myBooking = '/my-booking';
 }
 
 class AppRouter {
@@ -121,6 +123,9 @@ class AppRouter {
 
       case AppRoutes.chatbot:
         return _adaptive(const ChatbotPage(), settings: settings);
+
+      case AppRoutes.myBooking:
+        return _adaptive(const MyBookingPage(), settings: settings);
 
       default:
         return _adaptive(

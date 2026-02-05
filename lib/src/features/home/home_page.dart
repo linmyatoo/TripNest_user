@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripnest/src/app_router.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/services/booking_service.dart';
 import '../../core/services/event_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/event.dart';
@@ -21,23 +23,66 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading = true;
   String? _errorMessage;
   String _displayName = 'Traveler';
+  int _unreadNotificationCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadUserName();
     _loadEvents();
+    _loadUnreadCount();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final isLoggedIn = await AuthService.isLoggedIn();
+      if (!isLoggedIn) return;
+
+      final bookings = await BookingService.getMyBookings();
+      final prefs = await SharedPreferences.getInstance();
+      final lastReadCount = prefs.getInt('last_read_notification_count') ?? 0;
+
+      if (!mounted) return;
+      setState(() {
+        // Show unread dot if there are new bookings since last read
+        _unreadNotificationCount = bookings.length - lastReadCount;
+        if (_unreadNotificationCount < 0) _unreadNotificationCount = 0;
+      });
+    } catch (e) {
+      debugPrint('Error loading unread count: $e');
+    }
+  }
+
+  Future<void> _markNotificationsAsRead() async {
+    try {
+      final bookings = await BookingService.getMyBookings();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('last_read_notification_count', bookings.length);
+
+      if (!mounted) return;
+      setState(() {
+        _unreadNotificationCount = 0;
+      });
+    } catch (e) {
+      debugPrint('Error marking notifications as read: $e');
+    }
   }
 
   Future<void> _loadUserName() async {
     try {
       // First try to get name from API
       final profileData = await AuthService.getProfileMe();
+      debugPrint('Profile data: $profileData');
       if (mounted) {
-        final fullName = profileData['fullName'] as String?;
-        if (fullName != null && fullName.isNotEmpty) {
+        // Try different field names that might contain the user's name
+        final name = profileData['fullName'] as String? ??
+            profileData['full_name'] as String? ??
+            profileData['name'] as String? ??
+            profileData['username'] as String? ??
+            profileData['displayName'] as String?;
+        if (name != null && name.isNotEmpty) {
           setState(() {
-            _displayName = fullName;
+            _displayName = name;
           });
           return;
         }
@@ -45,12 +90,13 @@ class _HomePageState extends State<HomePage> {
 
       // Fallback to local storage if API fails
       final userData = await AuthService.getUserData();
-      final name = userData['username'];
+      final name = userData['name'] ?? userData['username'];
       if (!mounted || name == null || name.isEmpty) return;
       setState(() {
         _displayName = name;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error loading user name: $e');
       // Ignore errors and keep the fallback name.
     }
   }
@@ -67,12 +113,14 @@ class _HomePageState extends State<HomePage> {
         EventService.getUpcomingEvents(),
       ]);
 
+      if (!mounted) return;
       setState(() {
         _popularEvents = results[0];
         _upcomingEvents = results[1];
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
@@ -82,8 +130,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false, // Prevent back navigation
+    return PopScope(
+      canPop: false, // Prevent back navigation
       child: Scaffold(
         appBar: _topBar(context),
         floatingActionButton: _chatbotFab(context),
@@ -210,10 +258,29 @@ class _HomePageState extends State<HomePage> {
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
       ]),
       actions: [
-        IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () =>
-                Navigator.of(context).pushNamed(NotificationFeedPage.route)),
+        Stack(
+          children: [
+            IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: () {
+                  _markNotificationsAsRead();
+                  Navigator.of(context).pushNamed(NotificationFeedPage.route);
+                }),
+            if (_unreadNotificationCount > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
         const SizedBox(width: 6),
       ],
     );
@@ -250,7 +317,7 @@ class _HomePageState extends State<HomePage> {
                 height: 132, // <= key: fits the 220 lane
                 width: double.infinity,
                 child: Image.network(
-                  e.imageUrl,
+                  e.primaryImage,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
