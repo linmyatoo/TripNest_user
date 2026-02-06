@@ -239,11 +239,14 @@ class _HomePageState extends State<HomePage> {
                           )
                         else
                           ..._upcomingEvents.map(
-                            (e) => EventCard(
-                              event: e,
-                              onTap: () => Navigator.pushNamed(
-                                  context, AppRoutes.eventDetails,
-                                  arguments: e.id),
+                            (e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: EventCard(
+                                event: e,
+                                onTap: () => Navigator.pushNamed(
+                                    context, AppRoutes.eventDetails,
+                                    arguments: e.id),
+                              ),
                             ),
                           ),
                       ],
