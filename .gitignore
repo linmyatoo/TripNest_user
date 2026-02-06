@@ -13,6 +13,9 @@
 .swiftpm/
 migrate_working_dir/
 
+# API Keys - DO NOT COMMIT
+lib/src/core/config/api_config.dart
+
 # IntelliJ related
 *.iml
 *.ipr

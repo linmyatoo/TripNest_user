@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripnest/src/app_router.dart';
@@ -236,12 +238,14 @@ class _HomePageState extends State<HomePage> {
                             ),
                           )
                         else
-                          ..._upcomingEvents.map((e) => EventCard(
-                                event: e,
-                                onTap: () => Navigator.pushNamed(
-                                    context, AppRoutes.eventDetails,
-                                    arguments: e.id),
-                              )),
+                          ..._upcomingEvents.map(
+                            (e) => EventCard(
+                              event: e,
+                              onTap: () => Navigator.pushNamed(
+                                  context, AppRoutes.eventDetails,
+                                  arguments: e.id),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -287,12 +291,62 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _chatbotFab(BuildContext context) {
-    return FloatingActionButton.small(
-      heroTag: 'chatbot-fab',
-      onPressed: () => Navigator.of(context).pushNamed(AppRoutes.chatbot),
-      backgroundColor: Colors.white,
-      elevation: 3,
-      child: const Icon(Icons.smart_toy_rounded, color: AppColors.primary),
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF3B82F6),
+            Color(0xFF2563EB),
+            Color(0xFF1D4ED8),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+            spreadRadius: 2,
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: () => Navigator.of(context).pushNamed(AppRoutes.chatbot),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 2,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.flutter_dash,
+                color: Colors.white,
+                size: 28,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
