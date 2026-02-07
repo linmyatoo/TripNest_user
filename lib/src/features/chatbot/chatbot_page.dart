@@ -53,19 +53,12 @@ Key features of TripNest:
 Be concise, friendly, and use emojis occasionally to keep the conversation engaging. 
 Always be helpful and provide actionable advice when possible.''';
 
-  final List<String> _quickReplies = [
-    '🎉 Find events near me',
-    '✈️ Travel recommendations',
-    '🏨 Best accommodations',
-    '📅 Upcoming festivals',
-  ];
-
   @override
   void initState() {
     super.initState();
     _messages.add(ChatMessage(
       text:
-          "Hello! 👋 I'm your TripNest AI assistant powered by Groq. I can help you discover amazing events, find travel recommendations, and plan your perfect trip. How can I help you today?",
+          "Hi! 👋 I'm your TripNest AI assistant. I can help you find events, plan trips, and discover new experiences. What would you like to explore today?",
       isUser: false,
     ));
   }
@@ -112,7 +105,7 @@ Always be helpful and provide actionable advice when possible.''';
         _isTyping = false;
         _messages.add(ChatMessage(
           text:
-              "Sorry, I encountered an error: ${e.toString()}. Please try again.",
+              "Sorry, I encountered an error. Please try again.",
           isUser: false,
         ));
       });
@@ -145,75 +138,43 @@ Always be helpful and provide actionable advice when possible.''';
       final data = jsonDecode(response.body);
       return data['choices'][0]['message']['content'] as String;
     } else {
-      throw Exception('API Error: ${response.statusCode} - ${response.body}');
+      throw Exception('API Error: ${response.statusCode}');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white,
-                    Colors.white.withValues(alpha: 0.9),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.flutter_dash,
-                color: AppColors.primary,
-                size: 26,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'TripNest Assistant',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  'Powered by TripNest',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.normal,
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ),
-          ],
+        title: const Text(
+          'TripNest AI',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
+          ),
         ),
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () => _showChatOptions(context),
+            icon: const Icon(Icons.refresh, color: Colors.black),
+            onPressed: () {
+              setState(() {
+                _messages.clear();
+                _messages.add(ChatMessage(
+                  text:
+                      "Hi! 👋 I'm your TripNest AI assistant. I can help you find events, plan trips, and discover new experiences. What would you like to explore today?",
+                  isUser: false,
+                ));
+              });
+            },
           ),
         ],
       ),
@@ -222,7 +183,7 @@ Always be helpful and provide actionable advice when possible.''';
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               itemCount: _messages.length + (_isTyping ? 1 : 0),
               itemBuilder: (context, index) {
                 if (_isTyping && index == _messages.length) {
@@ -232,68 +193,34 @@ Always be helpful and provide actionable advice when possible.''';
               },
             ),
           ),
-          if (_messages.length == 1)
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _quickReplies.map((reply) {
-                  return InkWell(
-                    onTap: () => _sendMessage(reply),
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.primary),
-                      ),
-                      child: Text(
-                        reply,
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
           Container(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              12,
-              16,
-              12 + MediaQuery.of(context).padding.bottom,
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: 12 + MediaQuery.of(context).padding.bottom,
             ),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
-              ],
             ),
             child: Row(
               children: [
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
-                      borderRadius: BorderRadius.circular(24),
+                      color: const Color(0xFFF0F0F0),
+                      borderRadius: BorderRadius.circular(25),
                     ),
                     child: TextField(
                       controller: _inputController,
-                      decoration: const InputDecoration(
-                        hintText: 'Type your message...',
-                        hintStyle: TextStyle(color: AppColors.muted),
+                      decoration: InputDecoration(
+                        hintText: 'yes give me',
+                        hintStyle: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 15,
+                        ),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
+                        contentPadding: const EdgeInsets.symmetric(
                           horizontal: 20,
                           vertical: 12,
                         ),
@@ -305,17 +232,24 @@ Always be helpful and provide actionable advice when possible.''';
                   ),
                 ),
                 const SizedBox(width: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    color: _isTyping ? Colors.grey : AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.send_rounded),
-                    color: Colors.white,
-                    onPressed: _isTyping
-                        ? null
-                        : () => _sendMessage(_inputController.text),
+                GestureDetector(
+                  onTap: _isTyping
+                      ? null
+                      : () => _sendMessage(_inputController.text),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: _isTyping 
+                          ? Colors.grey.shade300 
+                          : const Color(0xFF007AFF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.send,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                 ),
               ],
@@ -334,27 +268,20 @@ Always be helpful and provide actionable advice when possible.''';
       child: Row(
         mainAxisAlignment:
             isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
             Container(
               width: 32,
               height: 32,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF3B82F6),
-                    Color(0xFF2563EB),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(16),
+              decoration: const BoxDecoration(
+                color: Color.fromARGB(255, 9, 43, 213),
+                shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.flutter_dash,
                 color: Colors.white,
-                size: 20,
+                size: 18,
               ),
             ),
             const SizedBox(width: 8),
@@ -363,47 +290,27 @@ Always be helpful and provide actionable advice when possible.''';
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isUser ? AppColors.primary : Colors.white,
+                color: isUser 
+                    ? const Color(0xFF007AFF) 
+                    : const Color(0xFFE8E8E8),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(18),
                   topRight: const Radius.circular(18),
                   bottomLeft: Radius.circular(isUser ? 18 : 4),
                   bottomRight: Radius.circular(isUser ? 4 : 18),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
               ),
               child: Text(
                 message.text,
                 style: TextStyle(
-                  color: isUser ? Colors.white : AppColors.textPrimary,
+                  color: isUser ? Colors.white : Colors.black,
                   fontSize: 15,
                   height: 1.4,
                 ),
               ),
             ),
           ),
-          if (isUser) ...[
-            const SizedBox(width: 8),
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.person,
-                color: AppColors.primary,
-                size: 18,
-              ),
-            ),
-          ],
+          if (isUser) const SizedBox(width: 8),
         ],
       ),
     );
@@ -413,99 +320,37 @@ Always be helpful and provide actionable advice when possible.''';
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF3B82F6),
-                  Color(0xFF2563EB),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFF4ECDC4),
+              shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.flutter_dash,
+              Icons.smart_toy,
               color: Colors.white,
-              size: 20,
+              size: 18,
             ),
           ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: const BorderRadius.only(
+            decoration: const BoxDecoration(
+              color: Color(0xFFE8E8E8),
+              borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(18),
                 topRight: Radius.circular(18),
                 bottomLeft: Radius.circular(4),
                 bottomRight: Radius.circular(18),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
             child: const _TypingDots(),
           ),
         ],
       ),
-    );
-  }
-
-  void _showChatOptions(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(top: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.refresh),
-                title: const Text('Clear conversation'),
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    _messages.clear();
-                    _messages.add(ChatMessage(
-                      text:
-                          "Hello! 👋 I'm your TripNest AI assistant powered by Groq. I can help you discover amazing events, find travel recommendations, and plan your perfect trip. How can I help you today?",
-                      isUser: false,
-                    ));
-                  });
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: const Text('About'),
-                subtitle: const Text('Powered by Groq LLaMA 3.3 70B'),
-                onTap: () => Navigator.pop(context),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        );
-      },
     );
   }
 }
@@ -552,7 +397,7 @@ class _TypingDotsState extends State<_TypingDots>
               height: 8,
               margin: EdgeInsets.only(right: index < 2 ? 4 : 0),
               decoration: BoxDecoration(
-                color: AppColors.muted.withValues(alpha: 0.3 + opacity * 0.7),
+                color: Colors.grey.withValues(alpha: 0.3 + opacity * 0.7),
                 shape: BoxShape.circle,
               ),
             );
