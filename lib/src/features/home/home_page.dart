@@ -25,10 +25,6 @@ class _HomePageState extends State<HomePage> {
   String _displayName = 'Traveler';
   int _unreadNotificationCount = 0;
 
-  // For draggable chatbot button
-  Offset _chatbotOffset = const Offset(20, 500);
-  Size? _screenSize;
-
   @override
   void initState() {
     super.initState();
@@ -134,173 +130,128 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Get screen size for edge snapping
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_screenSize == null && context.mounted) {
-        final size = MediaQuery.of(context).size;
-        setState(() => _screenSize = size);
-      }
-    });
     return PopScope(
       canPop: false, // Prevent back navigation
       child: Scaffold(
         appBar: _topBar(context),
-        body: Stack(
-          children: [
-            // Main content
-            _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _errorMessage != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error_outline,
-                                size: 64, color: Colors.red),
-                            const SizedBox(height: 16),
-                            const Text('Error loading events',
-                                style: TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 8),
-                            Text(_errorMessage!,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(color: AppColors.muted)),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: _loadEvents,
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('Retry'),
-                            ),
-                          ],
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _errorMessage != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        const Text('Error loading events',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Text(_errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: AppColors.muted)),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _loadEvents,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
                         ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: _loadEvents,
-                        child: ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                          children: [
-                            // search bar
-                            GestureDetector(
-                              onTap: () => Navigator.of(context)
-                                  .pushNamed(AppRoutes.search),
-                              child: Container(
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(
-                                      color: const Color(0xFFD1D5DB)),
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 14),
-                                alignment: Alignment.centerLeft,
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.search, color: AppColors.muted),
-                                    SizedBox(width: 8),
-                                    Text('What would you like me to ask?',
-                                        style:
-                                            TextStyle(color: AppColors.muted)),
-                                  ],
-                                ),
-                              ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadEvents,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      children: [
+                        // search bar
+                        GestureDetector(
+                          onTap: () => Navigator.of(context)
+                              .pushNamed(AppRoutes.search),
+                          child: Container(
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                  color: const Color(0xFFD1D5DB)),
                             ),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 14),
+                            alignment: Alignment.centerLeft,
+                            child: const Row(
+                              children: [
+                                Icon(Icons.search, color: AppColors.muted),
+                                SizedBox(width: 8),
+                                Text('What would you like me to ask?',
+                                    style:
+                                        TextStyle(color: AppColors.muted)),
+                              ],
+                            ),
+                          ),
+                        ),
 
-                            const SizedBox(height: 18),
-                            const Text('Popular Events',
-                                style: TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 8),
+                        const SizedBox(height: 18),
+                        const Text('Popular Events',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 8),
 
-                            // horizontal cards
-                            _popularEvents.isEmpty
-                                ? const Center(
-                                    child: Padding(
-                                      padding: EdgeInsets.all(32.0),
-                                      child: Text('No events available',
-                                          style: TextStyle(
-                                              color: AppColors.muted)),
-                                    ),
-                                  )
-                                : SizedBox(
-                                    height: 252,
-                                    child: ListView.separated(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: _popularEvents.length,
-                                      separatorBuilder: (_, __) =>
-                                          const SizedBox(width: 14),
-                                      itemBuilder: (context, i) {
-                                        final e = _popularEvents[i];
-                                        return _heroCard(context, e);
-                                      },
-                                    ),
-                                  ),
-
-                            const SizedBox(height: 16),
-                            const Text('Upcoming events',
-                                style: TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 10),
-
-                            // vertical list
-                            if (_upcomingEvents.isEmpty)
-                              const Center(
+                        // horizontal cards
+                        _popularEvents.isEmpty
+                            ? const Center(
                                 child: Padding(
                                   padding: EdgeInsets.all(32.0),
-                                  child: Text('No upcoming events',
-                                      style: TextStyle(color: AppColors.muted)),
+                                  child: Text('No events available',
+                                      style: TextStyle(
+                                          color: AppColors.muted)),
                                 ),
                               )
-                            else
-                              ..._upcomingEvents.map(
-                                (e) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 14),
-                                  child: EventCard(
-                                    event: e,
-                                    onTap: () => Navigator.pushNamed(
-                                        context, AppRoutes.eventDetails,
-                                        arguments: e.id),
-                                  ),
+                            : SizedBox(
+                                height: 252,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: _popularEvents.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(width: 14),
+                                  itemBuilder: (context, i) {
+                                    final e = _popularEvents[i];
+                                    return _heroCard(context, e);
+                                  },
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
-            // Draggable chatbot button
-            if (_screenSize != null)
-              Positioned(
-                left: _chatbotOffset.dx,
-                top: _chatbotOffset.dy,
-                child: Draggable(
-                  feedback: _chatbotFab(context, dragging: true),
-                  childWhenDragging: const SizedBox.shrink(),
-                  onDragEnd: (details) {
-                    final size = _screenSize!;
-                    final btnSize = 56.0;
-                    double x = details.offset.dx;
-                    double y =
-                        details.offset.dy - MediaQuery.of(context).padding.top;
-                    // Snap to left or right edge
-                    if (x + btnSize / 2 < size.width / 2) {
-                      x = 10;
-                    } else {
-                      x = size.width - btnSize - 10;
-                    }
-                    // Clamp y
-                    y = y.clamp(10.0, size.height - btnSize - 30.0);
-                    setState(() {
-                      _chatbotOffset = Offset(x, y);
-                    });
-                  },
-                  child: GestureDetector(
-                    onTap: () =>
-                        Navigator.of(context).pushNamed(AppRoutes.chatbot),
-                    child: _chatbotFab(context),
+
+                        const SizedBox(height: 16),
+                        const Text('Upcoming events',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 10),
+
+                        // vertical list
+                        if (_upcomingEvents.isEmpty)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32.0),
+                              child: Text('No upcoming events',
+                                  style: TextStyle(color: AppColors.muted)),
+                            ),
+                          )
+                        else
+                          ..._upcomingEvents.map(
+                            (e) => Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: EventCard(
+                                event: e,
+                                onTap: () => Navigator.pushNamed(
+                                    context, AppRoutes.eventDetails,
+                                    arguments: e.id),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }
@@ -339,62 +290,6 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(width: 6),
       ],
-    );
-  }
-
-  Widget _chatbotFab(BuildContext context, {bool dragging = false}) {
-    return Opacity(
-      opacity: dragging ? 0.7 : 1.0,
-      child: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF3B82F6),
-              Color(0xFF2563EB),
-              Color(0xFF1D4ED8),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withOpacity(0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-              spreadRadius: 2,
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: Center(
-            child: Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 2,
-                ),
-              ),
-              child: const Icon(
-                Icons.flutter_dash,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -465,13 +360,31 @@ class _HomePageState extends State<HomePage> {
                     alignment: Alignment.centerRight,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 3), // slimmer chip
+                          horizontal: 12, vertical: 5),
                       decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 0, 128, 255),
-                        borderRadius: BorderRadius.circular(10),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFF60A5FA), // light blue
+                            Color(0xFF3B82F6), // medium blue
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF3B82F6).withOpacity(0.3),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Text('${e.priceBaht}B/Person',
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                            fontSize: 13,
+                          )),
                     ),
                   ),
                 ],
