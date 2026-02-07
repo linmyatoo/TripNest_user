@@ -192,6 +192,8 @@ class _NotificationFeedPageState extends State<NotificationFeedPage> {
     setState(() {
       notification.isRead = true;
     });
+    // Navigate to NotificationFeedPage (refreshes page)
+    Navigator.of(context).pushNamed(NotificationFeedPage.route);
   }
 }
 

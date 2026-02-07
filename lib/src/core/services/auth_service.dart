@@ -15,6 +15,35 @@ class AuthService {
   static const String _emailKey = 'email';
   static const String _roleKey = 'role';
 
+  /// Change password (POST /api/auth/change-password)
+  static Future<Map<String, dynamic>> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final token = await getToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+    final url = Uri.parse('$baseUrl/auth/change-password');
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'oldPassword': oldPassword,
+        'newPassword': newPassword,
+      }),
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return data;
+    } else {
+      throw Exception(data['error'] ?? 'Failed to change password');
+    }
+  }
+
   /// Save user session data
   static Future<void> _saveSession({
     required String token,
@@ -387,8 +416,9 @@ class AuthService {
       if (phone != null) body['phone'] = phone;
       if (gender != null) body['gender'] = gender;
       if (dateOfBirth != null) body['dateOfBirth'] = dateOfBirth;
-      if (profilePictureUrl != null)
+      if (profilePictureUrl != null) {
         body['profilePictureUrl'] = profilePictureUrl;
+      }
 
       final response = await http.patch(
         Uri.parse('$baseUrl/profile/me'),

@@ -13,11 +13,11 @@ class HelpCenterPage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           Row(children: [
-            Expanded(
+            const Expanded(
               child: TextField(
                 decoration: InputDecoration(
                   hintText: 'Search...',
-                  prefixIcon: const Icon(Icons.search),
+                  prefixIcon: Icon(Icons.search),
                 ),
               ),
             ),
@@ -26,7 +26,7 @@ class HelpCenterPage extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: Color(0xFFF4F6F8),
+                color: const Color(0xFFF4F6F8),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.tune_rounded),
@@ -76,7 +76,7 @@ class _FAQTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Color(0xFFF4F6F8),
+        color: const Color(0xFFF4F6F8),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ExpansionTile(

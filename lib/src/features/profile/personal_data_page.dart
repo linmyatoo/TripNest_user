@@ -263,7 +263,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
     int height = decoded.height;
     img.Image current = decoded;
 
-    Future<File> _write(Uint8List data) async {
+    Future<File> write(Uint8List data) async {
       final dir = await getTemporaryDirectory();
       final path = p.join(
           dir.path, 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg');
@@ -276,7 +276,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
       final encoded =
           Uint8List.fromList(img.encodeJpg(current, quality: quality));
       if (encoded.lengthInBytes <= _maxBytes) {
-        return _write(encoded);
+        return write(encoded);
       }
 
       if (quality > 50) {
@@ -339,8 +339,9 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                     );
                     if (x != null) {
                       final compressed = await _ensureUnder1MB(File(x.path));
-                      if (compressed != null)
+                      if (compressed != null) {
                         setState(() => _avatar = compressed);
+                      }
                     }
                     if (mounted) Navigator.pop(context);
                   },
@@ -356,8 +357,9 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                     );
                     if (x != null) {
                       final compressed = await _ensureUnder1MB(File(x.path));
-                      if (compressed != null)
+                      if (compressed != null) {
                         setState(() => _avatar = compressed);
+                      }
                     }
                     if (mounted) Navigator.pop(context);
                   },
@@ -487,10 +489,10 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                     hint: '83542015258',
                     controller: phoneCtrl,
                     keyboardType: TextInputType.phone,
-                    prefix: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    prefix: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
                       child:
-                          Row(mainAxisSize: MainAxisSize.min, children: const [
+                          Row(mainAxisSize: MainAxisSize.min, children: [
                         Text('+65',
                             style: TextStyle(fontWeight: FontWeight.w600)),
                         SizedBox(width: 8),
@@ -532,7 +534,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: AppColors.primary),
+                        borderSide: const BorderSide(color: AppColors.primary),
                       ),
                       filled: true,
                       fillColor: Colors.white,

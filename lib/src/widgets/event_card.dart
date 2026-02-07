@@ -97,10 +97,10 @@ class EventCard extends StatelessWidget {
                     const Icon(Icons.star_rounded,
                         size: 16, color: Color(0xFFFFB300)),
                     const SizedBox(width: 4),
-                    Text(
+                    const Text(
                       'N/A',
                       style:
-                          const TextStyle(color: AppColors.muted, fontSize: 12),
+                          TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                     const Spacer(),
                     Flexible(

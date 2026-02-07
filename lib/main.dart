@@ -4,6 +4,8 @@ import 'src/app_router.dart';
 import 'src/core/services/local_notification_service.dart';
 import 'src/core/theme/app_colors.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocalNotificationService.initialize();
@@ -21,6 +23,7 @@ class TripNestApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'TripNest',
+      navigatorKey: navigatorKey,
       theme: base.copyWith(
         colorScheme: base.colorScheme.copyWith(
           primary: AppColors.primary,

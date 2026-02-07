@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
 
+import '../../../main.dart';
+
 /// Service for showing local notifications with sound and vibration
 class LocalNotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
@@ -30,7 +32,12 @@ class LocalNotificationService {
       iOS: iosSettings,
     );
 
-    await _notifications.initialize(initSettings);
+    await _notifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        navigatorKey.currentState?.pushNamed('/notifications-feed');
+      },
+    );
 
     _initialized = true;
     debugPrint('LocalNotificationService initialized');

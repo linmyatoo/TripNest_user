@@ -275,7 +275,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ],
               const SizedBox(height: 18),
-              Row(children: const [
+              const Row(children: [
                 Expanded(child: Divider()),
                 SizedBox(width: 12),
                 Text('Or continue with'),
@@ -283,9 +283,9 @@ class _LoginPageState extends State<LoginPage> {
                 Expanded(child: Divider()),
               ]),
               const SizedBox(height: 14),
-              Row(
+              const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
+                children: [
                   _Social('assets/icons/google.png'),
                   SizedBox(width: 16),
                   _Social('assets/icons/apple.png'),

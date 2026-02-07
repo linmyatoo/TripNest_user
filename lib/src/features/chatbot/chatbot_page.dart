@@ -1,8 +1,9 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
 import '../../core/config/api_config.dart';
-import '../../core/theme/app_colors.dart';
 
 class ChatMessage {
   final String text;
@@ -104,8 +105,7 @@ Always be helpful and provide actionable advice when possible.''';
       setState(() {
         _isTyping = false;
         _messages.add(ChatMessage(
-          text:
-              "Sorry, I encountered an error. Please try again.",
+          text: "Sorry, I encountered an error. Please try again.",
           isUser: false,
         ));
       });
@@ -214,7 +214,7 @@ Always be helpful and provide actionable advice when possible.''';
                     child: TextField(
                       controller: _inputController,
                       decoration: InputDecoration(
-                        hintText: 'yes give me',
+                        hintText: '',
                         hintStyle: TextStyle(
                           color: Colors.grey.shade500,
                           fontSize: 15,
@@ -240,8 +240,8 @@ Always be helpful and provide actionable advice when possible.''';
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: _isTyping 
-                          ? Colors.grey.shade300 
+                      color: _isTyping
+                          ? Colors.grey.shade300
                           : const Color(0xFF007AFF),
                       shape: BoxShape.circle,
                     ),
@@ -290,9 +290,8 @@ Always be helpful and provide actionable advice when possible.''';
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: isUser 
-                    ? const Color(0xFF007AFF) 
-                    : const Color(0xFFE8E8E8),
+                color:
+                    isUser ? const Color(0xFF007AFF) : const Color(0xFFE8E8E8),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(18),
                   topRight: const Radius.circular(18),
