@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/services/auth_service.dart';
@@ -27,18 +29,44 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   String? _errorMessage;
   String? _currentUserId;
   String _currentUserName = 'You';
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
     _initializeChat();
+    // Auto-refresh messages every 3 seconds for real-time updates
+    _refreshTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _refreshMessages();
+    });
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // Silent refresh without loading indicator
+  Future<void> _refreshMessages() async {
+    if (!mounted || _isSending) return;
+    try {
+      final messages = await ChatService.getChatMessages(widget.roomId);
+      if (!mounted) return;
+      
+      // Only update if there are new messages
+      if (messages.length != _messages.length) {
+        setState(() {
+          _messages = messages;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      // Silent fail on auto-refresh
+      debugPrint('Auto-refresh messages error: $e');
+    }
   }
 
   void _scrollToBottom() {
@@ -64,19 +92,44 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
       final userId = await AuthService.getUserId();
       final profileData = await AuthService.getProfileMe();
 
+      // API returns nested data: {data: {...}} or {user: {...}} or direct object
+      final user = profileData['data'] ?? profileData['user'] ?? profileData;
+
+      debugPrint('=== DEBUG: User data keys: ${user.keys.toList()}');
+      debugPrint('=== DEBUG: Local userId from SharedPrefs: $userId');
+
+      // Extract user ID from profile response (same format as API uses in messages)
+      // API uses 'userId' field according to profile page comment
+      String? apiUserId;
+      if (user['userId'] != null) {
+        apiUserId = user['userId'].toString();
+      } else if (user['id'] != null) {
+        apiUserId = user['id'].toString();
+      } else if (user['_id'] != null) {
+        apiUserId = user['_id'].toString();
+      }
+
+      debugPrint('=== DEBUG: Extracted apiUserId: $apiUserId');
+
       // Extract username from profile response
       String username = 'You';
-      if (profileData['name'] != null &&
-          profileData['name'].toString().isNotEmpty) {
-        username = profileData['name'];
-      } else if (profileData['username'] != null &&
-          profileData['username'].toString().isNotEmpty) {
-        username = profileData['username'];
+      if (user['fullName'] != null &&
+          user['fullName'].toString().isNotEmpty &&
+          user['fullName'] != 'Not Set') {
+        username = user['fullName'];
+      } else if (user['name'] != null &&
+          user['name'].toString().isNotEmpty) {
+        username = user['name'];
+      } else if (user['username'] != null &&
+          user['username'].toString().isNotEmpty) {
+        username = user['username'];
       }
 
       if (mounted) {
         setState(() {
-          _currentUserId = userId;
+          // Prefer the API's user ID format for consistency with message senderIds
+          _currentUserId = apiUserId ?? userId;
+          debugPrint('=== DEBUG: Final _currentUserId set to: $_currentUserId');
           _currentUserName = username;
         });
       }
@@ -164,10 +217,16 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
       final sentMessage = await ChatService.sendMessage(widget.roomId, content);
       if (!mounted) return;
 
+      // Use the senderId from API response to ensure consistency when reloading
+      // Also update _currentUserId to match the API's format
+      if (_currentUserId != sentMessage.senderId) {
+        _currentUserId = sentMessage.senderId;
+      }
+
       // Create a new message with the current user's info
       final messageWithName = Message(
         id: sentMessage.id,
-        senderId: _currentUserId ?? sentMessage.senderId,
+        senderId: sentMessage.senderId,
         senderName: _currentUserName,
         senderEmail: sentMessage.senderEmail,
         content: sentMessage.content,
@@ -248,11 +307,18 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                             itemCount: _messages.length,
                             itemBuilder: (context, index) {
                               final msg = _messages[index];
-                              final isMine = msg.senderId == _currentUserId;
+                              // Compare as strings to avoid type mismatch
+                              final isMine = msg.senderId.toString() ==
+                                  _currentUserId.toString();
+                              if (index == 0) {
+                                debugPrint('=== DEBUG: First msg.senderId: "${msg.senderId}"');
+                                debugPrint('=== DEBUG: _currentUserId: "$_currentUserId"');
+                                debugPrint('=== DEBUG: isMine result: $isMine');
+                              }
                               return _Bubble(
                                 text: msg.content,
                                 time: _formatTime(msg.createdAt),
-                                senderName: msg.senderName,
+                                senderName: isMine ? null : msg.senderName,
                                 mine: isMine,
                               );
                             },
@@ -265,9 +331,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Row(
                 children: [
-                  IconButton(
-                      onPressed: () {},
-                      icon: const Icon(Icons.attach_file_outlined)),
                   Expanded(
                     child: TextField(
                       controller: msgCtrl,

@@ -179,21 +179,11 @@ class _NotificationFeedPageState extends State<NotificationFeedPage> {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         itemBuilder: (context, index) => _SimpleNotificationCard(
           notification: _notifications[index],
-          onTap: () => _handleNotificationTap(_notifications[index]),
         ),
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemCount: _notifications.length,
       ),
     );
-  }
-
-  void _handleNotificationTap(_NotificationData notification) {
-    if (notification.isRead) return;
-    setState(() {
-      notification.isRead = true;
-    });
-    // Navigate to NotificationFeedPage (refreshes page)
-    Navigator.of(context).pushNamed(NotificationFeedPage.route);
   }
 }
 
@@ -223,63 +213,59 @@ class _NotificationData {
 
 class _SimpleNotificationCard extends StatelessWidget {
   final _NotificationData notification;
-  final VoidCallback? onTap;
 
   const _SimpleNotificationCard({
     required this.notification,
-    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
-    return Material(
-      color: notification.isRead ? Colors.white : const Color(0xFFF0F9FF),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
+    return Container(
+      decoration: BoxDecoration(
+        color: notification.isRead ? Colors.white : const Color(0xFFF0F9FF),
         borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      notification.title,
-                      style: textTheme.titleMedium
-                          ?.copyWith(color: const Color(0xFF2563EB)),
-                    ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    notification.title,
+                    style: textTheme.titleMedium
+                        ?.copyWith(color: const Color(0xFF2563EB)),
                   ),
-                  Text(notification.timeLabel,
-                      style: const TextStyle(color: Colors.grey)),
+                ),
+                Text(notification.timeLabel,
+                    style: const TextStyle(color: Colors.grey)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            RichText(
+              text: TextSpan(
+                style: textTheme.bodyMedium,
+                children: [
+                  TextSpan(text: notification.descriptionPrefix),
+                  TextSpan(
+                    text: notification.ticketCountLabel,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                  TextSpan(text: notification.amountLabel),
+                  TextSpan(text: notification.bookingIdLabel),
+                  const TextSpan(text: 'Booking status: '),
+                  TextSpan(
+                    text: notification.paymentStatusLabel,
+                    style: const TextStyle(color: Color(0xFF2563EB)),
+                  ),
                 ],
               ),
-              const SizedBox(height: 6),
-              RichText(
-                text: TextSpan(
-                  style: textTheme.bodyMedium,
-                  children: [
-                    TextSpan(text: notification.descriptionPrefix),
-                    TextSpan(
-                      text: notification.ticketCountLabel,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                    TextSpan(text: notification.amountLabel),
-                    TextSpan(text: notification.bookingIdLabel),
-                    const TextSpan(text: 'Booking status: '),
-                    TextSpan(
-                      text: notification.paymentStatusLabel,
-                      style: const TextStyle(color: Color(0xFF2563EB)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

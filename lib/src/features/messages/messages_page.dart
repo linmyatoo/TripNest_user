@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/services/chat_service.dart';
@@ -14,11 +16,38 @@ class _MessagesPageState extends State<MessagesPage> {
   List<ChatRoom> _chatRooms = [];
   bool _isLoading = false;
   String? _errorMessage;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _loadChatRooms();
+    // Auto-refresh every 5 seconds for real-time updates
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _refreshChatRooms();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  // Silent refresh without showing loading indicator
+  Future<void> _refreshChatRooms() async {
+    if (!mounted) return;
+    try {
+      final rooms = await ChatService.getChatRooms();
+      if (!mounted) return;
+      setState(() {
+        _chatRooms = rooms;
+        _errorMessage = null;
+      });
+    } catch (e) {
+      // Silent fail on auto-refresh to avoid disrupting the user
+      debugPrint('Auto-refresh error: $e');
+    }
   }
 
   Future<void> _loadChatRooms() async {
