@@ -5,6 +5,7 @@ import 'package:tripnest/src/app_router.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/booking_service.dart';
 import '../../core/services/event_service.dart';
+import '../../core/services/review_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/event.dart';
 import '../../widgets/event_card.dart';
@@ -20,6 +21,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   List<Event> _popularEvents = [];
   List<Event> _upcomingEvents = [];
+  Map<String, double> _eventRatings = {};
   bool _isLoading = true;
   String? _errorMessage;
   String _displayName = 'Traveler';
@@ -119,12 +121,34 @@ class _HomePageState extends State<HomePage> {
         _upcomingEvents = results[1];
         _isLoading = false;
       });
+      
+      // Load ratings for all events in background
+      _loadEventRatings();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loadEventRatings() async {
+    // Combine all events to load ratings
+    final allEvents = [..._popularEvents, ..._upcomingEvents];
+    final uniqueIds = allEvents.map((e) => e.id).toSet();
+    
+    for (final eventId in uniqueIds) {
+      try {
+        final rating = await ReviewService.getEventAverageRating(eventId);
+        if (rating != null && mounted) {
+          setState(() {
+            _eventRatings[eventId] = rating;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading rating for event $eventId: $e');
+      }
     }
   }
 
@@ -243,6 +267,7 @@ class _HomePageState extends State<HomePage> {
                               padding: const EdgeInsets.only(bottom: 14),
                               child: EventCard(
                                 event: e,
+                                averageRating: _eventRatings[e.id],
                                 onTap: () => Navigator.pushNamed(
                                     context, AppRoutes.eventDetails,
                                     arguments: e.id),

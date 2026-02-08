@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app_router.dart';
 import '../../core/services/event_service.dart';
 import '../../core/services/favorite_service.dart';
+import '../../core/services/review_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/event.dart';
 import '../../widgets/event_card.dart';
@@ -16,6 +17,7 @@ class FavoritesPage extends StatefulWidget {
 
 class _FavoritesPageState extends State<FavoritesPage> {
   List<Event> _favoriteEvents = [];
+  Map<String, double> _eventRatings = {};
   bool _isLoading = true;
 
   @override
@@ -55,6 +57,9 @@ class _FavoritesPageState extends State<FavoritesPage> {
           _favoriteEvents = events;
           _isLoading = false;
         });
+        
+        // Load ratings in background
+        _loadEventRatings();
       }
     } catch (e) {
       print('Error loading favorites: $e'); // Debug log
@@ -62,6 +67,21 @@ class _FavoritesPageState extends State<FavoritesPage> {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _loadEventRatings() async {
+    for (final event in _favoriteEvents) {
+      try {
+        final rating = await ReviewService.getEventAverageRating(event.id);
+        if (rating != null && mounted) {
+          setState(() {
+            _eventRatings[event.id] = rating;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading rating for event ${event.id}: $e');
       }
     }
   }
@@ -118,6 +138,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                         onDismissed: (_) => _removeFavorite(event.id),
                         child: EventCard(
                           event: event,
+                          averageRating: _eventRatings[event.id],
                           onTap: () async {
                             await Navigator.pushNamed(
                               context,

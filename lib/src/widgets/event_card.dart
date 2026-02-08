@@ -9,11 +9,13 @@ class EventCard extends StatelessWidget {
     required this.event,
     this.onTap,
     this.width, // when used in horizontal lists, give a width (e.g., 300)
+    this.averageRating,
   });
 
   final Event event;
   final VoidCallback? onTap;
   final double? width;
+  final double? averageRating;
 
   @override
   Widget build(BuildContext context) {
@@ -97,10 +99,12 @@ class EventCard extends StatelessWidget {
                     const Icon(Icons.star_rounded,
                         size: 16, color: Color(0xFFFFB300)),
                     const SizedBox(width: 4),
-                    const Text(
-                      'N/A',
+                    Text(
+                      averageRating != null
+                          ? averageRating!.toStringAsFixed(1)
+                          : 'N/A',
                       style:
-                          TextStyle(color: AppColors.muted, fontSize: 12),
+                          const TextStyle(color: AppColors.muted, fontSize: 12),
                     ),
                     const Spacer(),
                     Flexible(
