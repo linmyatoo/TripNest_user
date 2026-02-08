@@ -133,15 +133,15 @@ class _SignUpPageState extends State<SignUpPage> {
                 prefix: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Image.asset('assets/images/flag_th.png',
-                        width: 22, height: 22),
+                    // Image.asset('assets/images/flag_th.png',
+                    //     width: 22, height: 22),
                     const SizedBox(width: 8),
                     const Text('+66',
                         style: TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(width: 8),
                     const VerticalDivider(width: 1.0, thickness: 1.0),
                     const SizedBox(width: 4),
-                  ]),
+                  ],),
                 ),
               ),
               const SizedBox(height: 16),

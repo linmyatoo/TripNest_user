@@ -275,24 +275,24 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ],
               const SizedBox(height: 18),
-              const Row(children: [
-                Expanded(child: Divider()),
-                SizedBox(width: 12),
-                Text('Or continue with'),
-                SizedBox(width: 12),
-                Expanded(child: Divider()),
-              ]),
-              const SizedBox(height: 14),
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _Social('assets/icons/google.png'),
-                  SizedBox(width: 16),
-                  _Social('assets/icons/apple.png'),
-                  SizedBox(width: 16),
-                  _Social('assets/icons/facebook.png'),
-                ],
-              ),
+              // const Row(children: [
+              //   Expanded(child: Divider()),
+              //   SizedBox(width: 12),
+              //   Text('Or continue with'),
+              //   SizedBox(width: 12),
+              //   Expanded(child: Divider()),
+              // ]),
+              // const SizedBox(height: 14),
+              // const Row(
+              //   mainAxisAlignment: MainAxisAlignment.center,
+              //   children: [
+              //     _Social('assets/icons/google.png'),
+              //     SizedBox(width: 16),
+              //     _Social('assets/icons/apple.png'),
+              //     SizedBox(width: 16),
+              //     _Social('assets/icons/facebook.png'),
+              //   ],
+              // ),
               const SizedBox(height: 22),
               Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 const Text("Don't have an account? "),
@@ -313,24 +313,24 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class _Social extends StatelessWidget {
-  final String path;
-  const _Social(this.path);
+// class _Social extends StatelessWidget {
+//   final String path;
+//   const _Social(this.path);
 
-  @override
-  Widget build(BuildContext context) {
-    return Ink(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F6F8),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {},
-        child: Center(child: Image.asset(path, width: 22, height: 22)),
-      ),
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return Ink(
+//       width: 48,
+//       height: 48,
+//       decoration: BoxDecoration(
+//         color: const Color(0xFFF4F6F8),
+//         borderRadius: BorderRadius.circular(12),
+//       ),
+//       child: InkWell(
+//         borderRadius: BorderRadius.circular(12),
+//         onTap: () {},
+//         child: Center(child: Image.asset(path, width: 22, height: 22)),
+//       ),
+//     );
+//   }
+// }

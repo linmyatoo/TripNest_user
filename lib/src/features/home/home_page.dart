@@ -119,28 +119,30 @@ class _HomePageState extends State<HomePage> {
       final allEvents = results[0];
       final upcomingEvents = results[1];
 
-      // Load ratings for all events to determine popular ones
-      final Map<String, double> ratings = {};
-      final uniqueIds = [...allEvents, ...upcomingEvents].map((e) => e.id).toSet();
-      
-      await Future.wait(
-        uniqueIds.map((eventId) async {
-          try {
-            final rating = await ReviewService.getEventAverageRating(eventId);
-            if (rating != null) {
-              ratings[eventId] = rating;
+      // Only load ratings if logged in
+      final isLoggedIn = await AuthService.isLoggedIn();
+      Map<String, double> ratings = {};
+      List<Event> popularEvents = allEvents;
+      if (isLoggedIn) {
+        final uniqueIds = [...allEvents, ...upcomingEvents].map((e) => e.id).toSet();
+        await Future.wait(
+          uniqueIds.map((eventId) async {
+            try {
+              final rating = await ReviewService.getEventAverageRating(eventId);
+              if (rating != null) {
+                ratings[eventId] = rating;
+              }
+            } catch (e) {
+              debugPrint('Error loading rating for event $eventId: $e');
             }
-          } catch (e) {
-            debugPrint('Error loading rating for event $eventId: $e');
-          }
-        }),
-      );
-
-      // Filter popular events: only events with rating > 3
-      final popularEvents = allEvents.where((e) {
-        final rating = ratings[e.id];
-        return rating != null && rating > 3;
-      }).toList();
+          }),
+        );
+        // Filter popular events: only events with rating > 3
+        popularEvents = allEvents.where((e) {
+          final rating = ratings[e.id];
+          return rating != null && rating > 3;
+        }).toList();
+      }
 
       if (!mounted) return;
       setState(() {
