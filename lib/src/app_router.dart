@@ -11,6 +11,7 @@ import 'features/booking/my_booking_page.dart';
 import 'features/booking/review_page.dart';
 import 'features/chatbot/chatbot_page.dart';
 import 'features/details/event_detail_page.dart';
+import 'features/messages/chat_thread_page.dart';
 import 'features/notifications/notification_feed_page.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/payment/payment_page.dart';
@@ -34,6 +35,7 @@ class AppRoutes {
   static const review = '/review';
   static const chatbot = '/chatbot';
   static const myBooking = '/my-booking';
+  static const chatThread = '/chat-thread';
 }
 
 class AppRouter {
@@ -126,6 +128,16 @@ class AppRouter {
 
       case AppRoutes.myBooking:
         return _adaptive(const MyBookingPage(), settings: settings);
+
+      case AppRoutes.chatThread:
+        final args = settings.arguments as Map<String, dynamic>;
+        return _adaptive(
+          ChatThreadPage(
+            roomId: args['roomId'] as String,
+            roomName: args['roomName'] as String,
+          ),
+          settings: settings,
+        );
 
       default:
         return _adaptive(

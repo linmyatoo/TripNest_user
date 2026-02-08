@@ -1,9 +1,41 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/services/chat_service.dart';
 import 'chat_thread_page.dart';
+
+// Global notifier for unread message count
+class MessageNotifier extends ChangeNotifier {
+  static final MessageNotifier _instance = MessageNotifier._internal();
+  factory MessageNotifier() => _instance;
+  MessageNotifier._internal();
+
+  int _unreadCount = 0;
+  int get unreadCount => _unreadCount;
+
+  // Callback for showing banner
+  void Function(String roomName, String message)? onNewMessage;
+
+  void setUnreadCount(int count) {
+    if (_unreadCount != count) {
+      _unreadCount = count;
+      notifyListeners();
+    }
+  }
+
+  void showNewMessageBanner(String roomName, String message) {
+    onNewMessage?.call(roomName, message);
+  }
+
+  void clearUnread() {
+    if (_unreadCount != 0) {
+      _unreadCount = 0;
+      notifyListeners();
+    }
+  }
+}
 
 class MessagesPage extends StatefulWidget {
   const MessagesPage({super.key});
@@ -17,10 +49,12 @@ class _MessagesPageState extends State<MessagesPage> {
   bool _isLoading = false;
   String? _errorMessage;
   Timer? _refreshTimer;
+  int _lastKnownMessageCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _loadLastKnownCount();
     _loadChatRooms();
     // Auto-refresh every 5 seconds for real-time updates
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -34,12 +68,56 @@ class _MessagesPageState extends State<MessagesPage> {
     super.dispose();
   }
 
+  Future<void> _loadLastKnownCount() async {
+    final prefs = await SharedPreferences.getInstance();
+    _lastKnownMessageCount = prefs.getInt('last_known_message_count') ?? 0;
+  }
+
+  Future<void> _saveLastKnownCount(int count) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('last_known_message_count', count);
+    _lastKnownMessageCount = count;
+  }
+
+  // Calculate total messages across all rooms
+  int _getTotalMessageCount(List<ChatRoom> rooms) {
+    int total = 0;
+    for (final room in rooms) {
+      if (room.lastMessage != null) {
+        // Use a hash of room id + last message id to track changes
+        total += room.lastMessage!.id.hashCode;
+      }
+    }
+    return total;
+  }
+
   // Silent refresh without showing loading indicator
   Future<void> _refreshChatRooms() async {
     if (!mounted) return;
     try {
       final rooms = await ChatService.getChatRooms();
       if (!mounted) return;
+      
+      final currentCount = _getTotalMessageCount(rooms);
+      
+      // Check if there are new messages
+      if (currentCount != _lastKnownMessageCount && _lastKnownMessageCount != 0) {
+        // New messages arrived - update the notification count
+        MessageNotifier().setUnreadCount(1);
+        
+        // Find the room with the new message and show banner
+        for (final room in rooms) {
+          if (room.lastMessage != null) {
+            // Show banner for the latest message
+            MessageNotifier().showNewMessageBanner(
+              room.eventTitle,
+              '${room.lastMessage!.senderName}: ${room.lastMessage!.content}',
+            );
+            break; // Show only one banner
+          }
+        }
+      }
+      
       setState(() {
         _chatRooms = rooms;
         _errorMessage = null;
@@ -48,6 +126,13 @@ class _MessagesPageState extends State<MessagesPage> {
       // Silent fail on auto-refresh to avoid disrupting the user
       debugPrint('Auto-refresh error: $e');
     }
+  }
+
+  // Mark messages as read when viewing
+  void _markAsRead() {
+    final currentCount = _getTotalMessageCount(_chatRooms);
+    _saveLastKnownCount(currentCount);
+    MessageNotifier().clearUnread();
   }
 
   Future<void> _loadChatRooms() async {
@@ -60,10 +145,21 @@ class _MessagesPageState extends State<MessagesPage> {
     try {
       final rooms = await ChatService.getChatRooms();
       if (!mounted) return;
+      
+      final currentCount = _getTotalMessageCount(rooms);
+      
+      // If first load, save the count
+      if (_lastKnownMessageCount == 0) {
+        _saveLastKnownCount(currentCount);
+      }
+      
       setState(() {
         _chatRooms = rooms;
         _isLoading = false;
       });
+      
+      // Mark as read since user is viewing
+      _markAsRead();
     } catch (e) {
       if (!mounted) return;
       setState(() {

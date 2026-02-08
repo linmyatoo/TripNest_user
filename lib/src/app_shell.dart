@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_router.dart';
+import 'core/services/chat_service.dart';
+import 'core/services/local_notification_service.dart';
 import 'core/theme/app_colors.dart';
 import 'features/booking/my_booking_page.dart';
 import 'features/favorites/favorites_page.dart';
@@ -26,16 +31,119 @@ class _AppShellState extends State<AppShell> {
   Offset _chatbotOffset = const Offset(20, 500);
   Size? _screenSize;
 
+  // Message notifier for badge
+  final _messageNotifier = MessageNotifier();
+  
+  // Timer for checking new messages at AppShell level
+  Timer? _messageCheckTimer;
+  Map<String, String> _lastKnownMessageIds = {}; // roomId -> lastMessageId
+
   @override
   void initState() {
     super.initState();
     idx = widget.initialIndex;
+    _messageNotifier.addListener(_onMessageCountChanged);
+    // Start checking for new messages every 5 seconds
+    _loadLastKnownMessageIds();
+    _messageCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _checkForNewMessages();
+    });
+  }
+
+  @override
+  void dispose() {
+    _messageCheckTimer?.cancel();
+    _messageNotifier.removeListener(_onMessageCountChanged);
+    super.dispose();
+  }
+
+  Future<void> _loadLastKnownMessageIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList('shell_last_message_ids') ?? [];
+    _lastKnownMessageIds = {};
+    for (final entry in stored) {
+      final parts = entry.split(':');
+      if (parts.length == 2) {
+        _lastKnownMessageIds[parts[0]] = parts[1];
+      }
+    }
+  }
+
+  Future<void> _saveLastKnownMessageIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = _lastKnownMessageIds.entries
+        .map((e) => '${e.key}:${e.value}')
+        .toList();
+    await prefs.setStringList('shell_last_message_ids', list);
+  }
+
+  Future<void> _checkForNewMessages() async {
+    if (!mounted) return;
+    try {
+      final rooms = await ChatService.getChatRooms();
+      if (!mounted) return;
+      
+      // First time - just save all message IDs
+      if (_lastKnownMessageIds.isEmpty) {
+        for (final room in rooms) {
+          if (room.lastMessage != null) {
+            _lastKnownMessageIds[room.id] = room.lastMessage!.id;
+          }
+        }
+        _saveLastKnownMessageIds();
+        return;
+      }
+      
+      // Check each room for new messages
+      bool hasNewMessages = false;
+      for (final room in rooms) {
+        if (room.lastMessage != null) {
+          final lastKnownId = _lastKnownMessageIds[room.id];
+          final currentId = room.lastMessage!.id;
+          
+          // New message in this room
+          if (lastKnownId != currentId) {
+            hasNewMessages = true;
+            
+            final senderName = room.lastMessage!.senderName;
+            final messageContent = room.lastMessage!.content;
+            
+            // Show system notification with correct room info
+            LocalNotificationService.showMessageNotification(
+              senderName: room.eventTitle,
+              message: '$senderName: $messageContent',
+              roomId: room.id,
+              roomName: room.eventTitle,
+            );
+            
+            // Update the tracked ID for this room
+            _lastKnownMessageIds[room.id] = currentId;
+            break; // Only show one notification at a time
+          }
+        }
+      }
+      
+      if (hasNewMessages) {
+        _messageNotifier.setUnreadCount(1);
+        _saveLastKnownMessageIds();
+      }
+    } catch (e) {
+      debugPrint('Error checking for new messages: $e');
+    }
+  }
+
+  void _onMessageCountChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onTabSelected(int i) {
     // If switching to favorites tab, force rebuild to refresh data
     if (i == 2) {
       _favoritesRebuildKey++;
+    }
+    // If switching to messages tab, clear unread badge
+    if (i == 3) {
+      _messageNotifier.clearUnread();
     }
     setState(() => idx = i);
   }
@@ -105,24 +213,30 @@ class _AppShellState extends State<AppShell> {
         indicatorColor: AppColors.primary.withValues(alpha: .12),
         selectedIndex: idx,
         onDestinationSelected: _onTabSelected,
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
               icon: Icon(Icons.home_outlined),
               selectedIcon: Icon(Icons.home),
               label: 'Home'),
-          NavigationDestination(
+          const NavigationDestination(
               icon: Icon(Icons.receipt_long_outlined),
               selectedIcon: Icon(Icons.receipt_long),
               label: 'My Booking'),
-          NavigationDestination(
+          const NavigationDestination(
               icon: Icon(Icons.favorite_border),
               selectedIcon: Icon(Icons.favorite),
               label: 'Favorite'),
           NavigationDestination(
-              icon: Icon(Icons.message_outlined),
-              selectedIcon: Icon(Icons.message),
+              icon: Badge(
+                isLabelVisible: _messageNotifier.unreadCount > 0,
+                child: const Icon(Icons.message_outlined),
+              ),
+              selectedIcon: Badge(
+                isLabelVisible: _messageNotifier.unreadCount > 0,
+                child: const Icon(Icons.message),
+              ),
               label: 'Message'),
-          NavigationDestination(
+          const NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person),
               label: 'My Profile'),

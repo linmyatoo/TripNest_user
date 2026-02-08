@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
@@ -35,12 +37,43 @@ class LocalNotificationService {
     await _notifications.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        navigatorKey.currentState?.pushNamed('/notifications-feed');
+        _handleNotificationTap(response.payload);
       },
     );
 
     _initialized = true;
     debugPrint('LocalNotificationService initialized');
+  }
+
+  /// Handle notification tap based on payload
+  static void _handleNotificationTap(String? payload) {
+    if (payload == null || payload.isEmpty) {
+      navigatorKey.currentState?.pushNamed('/notifications-feed');
+      return;
+    }
+
+    try {
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      final type = data['type'] as String?;
+      
+      if (type == 'message') {
+        final roomId = data['roomId'] as String?;
+        final roomName = data['roomName'] as String?;
+        if (roomId != null && roomName != null) {
+          navigatorKey.currentState?.pushNamed(
+            '/chat-thread',
+            arguments: {'roomId': roomId, 'roomName': roomName},
+          );
+          return;
+        }
+      }
+      
+      // Default fallback
+      navigatorKey.currentState?.pushNamed('/notifications-feed');
+    } catch (e) {
+      debugPrint('Error parsing notification payload: $e');
+      navigatorKey.currentState?.pushNamed('/notifications-feed');
+    }
   }
 
   /// Request notification permissions (iOS)
@@ -154,6 +187,61 @@ class LocalNotificationService {
       body,
       notificationDetails,
     );
+  }
+
+  /// Show a message notification
+  static Future<void> showMessageNotification({
+    required String senderName,
+    required String message,
+    required String roomId,
+    required String roomName,
+  }) async {
+    if (!_initialized) {
+      await initialize();
+    }
+
+    await _vibrate(duration: 300);
+
+    const androidDetails = AndroidNotificationDetails(
+      'message_channel',
+      'Message Notifications',
+      channelDescription: 'Notifications for new messages',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+      category: AndroidNotificationCategory.message,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    // Create payload with chat room info for navigation
+    final payload = jsonEncode({
+      'type': 'message',
+      'roomId': roomId,
+      'roomName': roomName,
+    });
+
+    await _notifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      senderName,
+      message,
+      notificationDetails,
+      payload: payload,
+    );
+
+    debugPrint('Message notification shown from: $senderName');
   }
 
   /// Vibrate the device

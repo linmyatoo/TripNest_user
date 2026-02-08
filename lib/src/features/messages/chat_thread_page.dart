@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../core/services/chat_service.dart';
+import 'messages_page.dart';
 
 class ChatThreadPage extends StatefulWidget {
   const ChatThreadPage({
@@ -82,6 +83,8 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   }
 
   Future<void> _initializeChat() async {
+    // Clear unread badge when entering chat
+    MessageNotifier().clearUnread();
     await _loadCurrentUser();
     await _loadMessages();
     await _loadMembers();
