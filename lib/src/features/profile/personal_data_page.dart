@@ -470,13 +470,13 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                   const Text('Full Name',
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
-                  AppTextField(hint: 'Harry', controller: nameCtrl),
+                  AppTextField(hint: '', controller: nameCtrl),
                   const SizedBox(height: 16),
                   const Text('Email',
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   AppTextField(
-                    hint: 'harry3435@gmail.com',
+                    hint: '',
                     controller: emailCtrl,
                     keyboardType: TextInputType.emailAddress,
                     readOnly: true,
@@ -486,14 +486,14 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   AppTextField(
-                    hint: '83542015258',
+                    hint: '',
                     controller: phoneCtrl,
                     keyboardType: TextInputType.phone,
                     prefix: const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
                       child:
                           Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text('+65',
+                        Text('+66',
                             style: TextStyle(fontWeight: FontWeight.w600)),
                         SizedBox(width: 8),
                         VerticalDivider(width: 1, thickness: 1),
@@ -510,7 +510,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                     readOnly: true,
                     onTap: _pickDob,
                     decoration: const InputDecoration(
-                      hintText: 'November 24, 2000',
+                      hintText: '',
                       suffixIcon: Icon(Icons.calendar_today_outlined),
                     ),
                   ),

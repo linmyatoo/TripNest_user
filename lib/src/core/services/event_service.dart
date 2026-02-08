@@ -93,4 +93,48 @@ class EventService {
       throw Exception('Network error: ${e.toString()}');
     }
   }
+
+  /// Search events by location, keyword, or mood
+  static Future<List<Event>> searchEvents({
+    String? location,
+    String? keyword,
+    String? mood,
+  }) async {
+    try {
+      final queryParams = <String, String>{};
+      if (location != null && location.isNotEmpty) {
+        queryParams['location'] = location;
+      }
+      if (keyword != null && keyword.isNotEmpty) {
+        queryParams['keyword'] = keyword;
+      }
+      if (mood != null && mood.isNotEmpty) {
+        queryParams['mood'] = mood;
+      }
+
+      final url = Uri.parse('$baseUrl/events/search').replace(queryParameters: queryParams);
+
+      print('Searching events from: $url');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+
+      print('Search response status: ${response.statusCode}');
+      print('Search response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) => Event.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to search events');
+      }
+    } catch (e) {
+      print('Error searching events: $e');
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
 }
