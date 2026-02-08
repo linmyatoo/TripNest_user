@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_router.dart';
+import 'core/services/auth_service.dart';
 import 'core/services/chat_service.dart';
 import 'core/services/local_notification_service.dart';
 import 'core/theme/app_colors.dart';
@@ -83,6 +84,18 @@ class _AppShellState extends State<AppShell> {
       final rooms = await ChatService.getChatRooms();
       if (!mounted) return;
       
+      // Get current user ID from profile API to match message senderId format
+      String? currentUserId;
+      try {
+        final profileData = await AuthService.getProfileMe();
+        // Use userId field which matches message senderId format
+        currentUserId = (profileData['userId'] ?? profileData['id'] ?? profileData['_id'])?.toString();
+        debugPrint('Current userId for notification check: $currentUserId');
+      } catch (e) {
+        // Fallback to stored user ID
+        currentUserId = await AuthService.getUserId();
+      }
+      
       // First time - just save all message IDs
       if (_lastKnownMessageIds.isEmpty) {
         for (final room in rooms) {
@@ -103,6 +116,17 @@ class _AppShellState extends State<AppShell> {
           
           // New message in this room
           if (lastKnownId != currentId) {
+            // Update the tracked ID for this room
+            _lastKnownMessageIds[room.id] = currentId;
+            
+            // Skip notification if the sender is the current user
+            final senderId = room.lastMessage!.senderId.toString();
+            debugPrint('Message senderId: $senderId, currentUserId: $currentUserId');
+            if (currentUserId != null && senderId == currentUserId.toString()) {
+              debugPrint('Skipping notification - own message');
+              continue;
+            }
+            
             hasNewMessages = true;
             
             final senderName = room.lastMessage!.senderName;
@@ -116,8 +140,6 @@ class _AppShellState extends State<AppShell> {
               roomName: room.eventTitle,
             );
             
-            // Update the tracked ID for this room
-            _lastKnownMessageIds[room.id] = currentId;
             break; // Only show one notification at a time
           }
         }
@@ -125,8 +147,8 @@ class _AppShellState extends State<AppShell> {
       
       if (hasNewMessages) {
         _messageNotifier.setUnreadCount(1);
-        _saveLastKnownMessageIds();
       }
+      _saveLastKnownMessageIds();
     } catch (e) {
       debugPrint('Error checking for new messages: $e');
     }
