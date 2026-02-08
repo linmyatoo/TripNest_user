@@ -16,6 +16,9 @@ class ChangePasswordPage extends StatelessWidget {
     final formKey = GlobalKey<FormState>();
     ValueNotifier<bool> isLoading = ValueNotifier(false);
     ValueNotifier<String?> errorMessage = ValueNotifier(null);
+    ValueNotifier<bool> isOldPasswordVisible = ValueNotifier(false);
+    ValueNotifier<bool> isNewPasswordVisible = ValueNotifier(false);
+    ValueNotifier<bool> isConfirmPasswordVisible = ValueNotifier(false);
 
     return Scaffold(
       appBar: AppBar(
@@ -28,28 +31,70 @@ class ChangePasswordPage extends StatelessWidget {
             const Text('Current Password',
                 style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            AppTextField(
-              hint: 'Enter Your Password',
-              obscure: true,
-              controller: oldPasswordController,
+            ValueListenableBuilder<bool>(
+              valueListenable: isOldPasswordVisible,
+              builder: (context, isVisible, _) {
+                return AppTextField(
+                  hint: 'Enter Your Password',
+                  obscure: !isVisible,
+                  controller: oldPasswordController,
+                  suffix: IconButton(
+                    icon: Icon(
+                      isVisible ? Icons.visibility : Icons.visibility_off,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () {
+                      isOldPasswordVisible.value = !isOldPasswordVisible.value;
+                    },
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 16),
             const Text('New Password',
                 style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            AppTextField(
-              hint: 'Enter Your new Password',
-              obscure: true,
-              controller: newPasswordController,
+            ValueListenableBuilder<bool>(
+              valueListenable: isNewPasswordVisible,
+              builder: (context, isVisible, _) {
+                return AppTextField(
+                  hint: 'Enter Your new Password',
+                  obscure: !isVisible,
+                  controller: newPasswordController,
+                  suffix: IconButton(
+                    icon: Icon(
+                      isVisible ? Icons.visibility : Icons.visibility_off,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () {
+                      isNewPasswordVisible.value = !isNewPasswordVisible.value;
+                    },
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 16),
             const Text('Confirm New Password',
                 style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            AppTextField(
-              hint: 'Re-enter Your new Password',
-              obscure: true,
-              controller: confirmPasswordController,
+            ValueListenableBuilder<bool>(
+              valueListenable: isConfirmPasswordVisible,
+              builder: (context, isVisible, _) {
+                return AppTextField(
+                  hint: 'Re-enter Your new Password',
+                  obscure: !isVisible,
+                  controller: confirmPasswordController,
+                  suffix: IconButton(
+                    icon: Icon(
+                      isVisible ? Icons.visibility : Icons.visibility_off,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () {
+                      isConfirmPasswordVisible.value = !isConfirmPasswordVisible.value;
+                    },
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 24),
             ValueListenableBuilder<bool>(
