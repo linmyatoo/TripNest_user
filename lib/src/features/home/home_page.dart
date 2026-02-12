@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripnest/src/app_router.dart';
 
+import '../../core/services/air_quality_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/booking_service.dart';
 import '../../core/services/event_service.dart';
@@ -26,6 +27,8 @@ class _HomePageState extends State<HomePage> {
   String? _errorMessage;
   String _displayName = 'Traveler';
   int _unreadNotificationCount = 0;
+  AirQualityData? _aqiData;
+  bool _isLoadingAqi = false;
 
   @override
   void initState() {
@@ -33,6 +36,28 @@ class _HomePageState extends State<HomePage> {
     _loadUserName();
     _loadEvents();
     _loadUnreadCount();
+    _loadAqiData();
+  }
+
+  Future<void> _loadAqiData() async {
+    if (_isLoadingAqi) return;
+    setState(() => _isLoadingAqi = true);
+    try {
+      // First try to get cached data for instant display
+      final cached = await AirQualityService.getCachedAqi();
+      if (cached != null && mounted) {
+        setState(() => _aqiData = cached);
+      }
+      // Then fetch fresh data
+      final fresh = await AirQualityService.getAirQuality();
+      if (fresh != null && mounted) {
+        setState(() => _aqiData = fresh);
+      }
+    } catch (e) {
+      debugPrint('Error loading AQI: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingAqi = false);
+    }
   }
 
   Future<void> _loadUnreadCount() async {
@@ -296,6 +321,52 @@ class _HomePageState extends State<HomePage> {
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
       ]),
       actions: [
+        // AQI Widget
+        if (_aqiData != null)
+          GestureDetector(
+            onTap: () => _showAqiDetails(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.only(right: 4),
+              decoration: BoxDecoration(
+                color: Color(_aqiData!.colorValue).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Color(_aqiData!.colorValue).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'AQI',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Color(_aqiData!.colorValue),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    '${_aqiData!.aqi}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(_aqiData!.colorValue),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (_isLoadingAqi)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
         Stack(
           children: [
             IconButton(
@@ -321,6 +392,18 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(width: 6),
       ],
+    );
+  }
+
+  void _showAqiDetails(BuildContext context) {
+    if (_aqiData == null) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => _AqiDetailsSheet(aqiData: _aqiData!),
     );
   }
 
@@ -425,5 +508,236 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+}
+
+/// Bottom sheet showing detailed AQI information
+class _AqiDetailsSheet extends StatelessWidget {
+  final AirQualityData aqiData;
+
+  const _AqiDetailsSheet({required this.aqiData});
+
+  @override
+  Widget build(BuildContext context) {
+    final aqiColor = Color(aqiData.colorValue);
+    final bgColor = Color(aqiData.backgroundColorValue);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: aqiColor,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.air,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Air Quality Index',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on,
+                            size: 14, color: AppColors.muted),
+                        const SizedBox(width: 4),
+                        Text(
+                          aqiData.cityName,
+                          style: const TextStyle(
+                              color: AppColors.muted, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  color: aqiColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: aqiColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  '${aqiData.aqi}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Status
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: aqiColor.withOpacity(0.3),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: aqiColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      aqiData.level,
+                      style: TextStyle(
+                        color: aqiColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  aqiData.healthRecommendation,
+                  style: const TextStyle(
+                      fontSize: 14, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Pollutant details
+          Row(
+            children: [
+              _buildPollutantCard(
+                  'PM2.5', aqiData.pm25.toStringAsFixed(1), 'μg/m³', aqiColor),
+              const SizedBox(width: 12),
+              _buildPollutantCard(
+                  'PM10', aqiData.pm10.toStringAsFixed(1), 'μg/m³', aqiColor),
+              const SizedBox(width: 12),
+              _buildPollutantCard('Temp',
+                  '${aqiData.temperature.toStringAsFixed(0)}°C', '', aqiColor),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Last updated
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.access_time,
+                      size: 14, color: AppColors.muted),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Updated: ${_formatTime(aqiData.updatedAt)}',
+                    style:
+                        const TextStyle(color: AppColors.muted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPollutantCard(
+      String label, String value, String unit, Color accentColor) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: accentColor,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            if (unit.isNotEmpty)
+              Text(
+                unit,
+                style: const TextStyle(
+                  color: AppColors.muted,
+                  fontSize: 11,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    final local = time.toLocal();
+    final now = DateTime.now();
+    final diff = now.difference(local);
+
+    if (diff.inMinutes < 60) {
+      return '${diff.inMinutes}m ago';
+    } else if (diff.inHours < 24) {
+      return '${diff.inHours}h ago';
+    }
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 }

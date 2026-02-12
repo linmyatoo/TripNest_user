@@ -55,7 +55,7 @@ class LocalNotificationService {
     try {
       final data = jsonDecode(payload) as Map<String, dynamic>;
       final type = data['type'] as String?;
-      
+
       if (type == 'message') {
         final roomId = data['roomId'] as String?;
         final roomName = data['roomName'] as String?;
@@ -67,7 +67,13 @@ class LocalNotificationService {
           return;
         }
       }
-      
+
+      if (type == 'aqi') {
+        // Navigate to notification feed for AQI notifications
+        navigatorKey.currentState?.pushNamed('/notifications-feed');
+        return;
+      }
+
       // Default fallback
       navigatorKey.currentState?.pushNamed('/notifications-feed');
     } catch (e) {
@@ -242,6 +248,58 @@ class LocalNotificationService {
     );
 
     debugPrint('Message notification shown from: $senderName');
+  }
+
+  /// Show an AQI/Air Quality notification
+  static Future<void> showAqiNotification({
+    required String title,
+    required String body,
+    required int aqiValue,
+  }) async {
+    if (!_initialized) {
+      await initialize();
+    }
+
+    await _vibrate(duration: 300);
+
+    const androidDetails = AndroidNotificationDetails(
+      'aqi_channel',
+      'Air Quality Notifications',
+      channelDescription: 'Notifications for air quality updates',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    // Create payload for navigation
+    final payload = jsonEncode({
+      'type': 'aqi',
+      'aqiValue': aqiValue,
+    });
+
+    await _notifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      notificationDetails,
+      payload: payload,
+    );
+
+    debugPrint('AQI notification shown: AQI $aqiValue');
   }
 
   /// Vibrate the device

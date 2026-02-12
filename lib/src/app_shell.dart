@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_router.dart';
+import 'core/services/air_quality_service.dart';
 import 'core/services/auth_service.dart';
 import 'core/services/chat_service.dart';
 import 'core/services/local_notification_service.dart';
@@ -37,6 +38,7 @@ class _AppShellState extends State<AppShell> {
 
   // Timer for checking new messages at AppShell level
   Timer? _messageCheckTimer;
+  Timer? _aqiCheckTimer;
   Map<String, String> _lastKnownMessageIds = {}; // roomId -> lastMessageId
 
   @override
@@ -49,11 +51,28 @@ class _AppShellState extends State<AppShell> {
     _messageCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _checkForNewMessages();
     });
+    // Check AQI every 30 minutes for background updates
+    _checkAqi(); // Initial check
+    _aqiCheckTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+      _checkAqi();
+    });
+  }
+
+  Future<void> _checkAqi() async {
+    try {
+      // This will fetch AQI and automatically trigger notifications
+      // based on daily check or significant change logic in AirQualityService
+      await AirQualityService.checkAndNotify();
+      debugPrint('Background AQI check completed');
+    } catch (e) {
+      debugPrint('Error in background AQI check: $e');
+    }
   }
 
   @override
   void dispose() {
     _messageCheckTimer?.cancel();
+    _aqiCheckTimer?.cancel();
     _messageNotifier.removeListener(_onMessageCountChanged);
     super.dispose();
   }
