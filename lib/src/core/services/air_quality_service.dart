@@ -153,53 +153,57 @@ class AirQualityService {
     }
   }
 
-  /// Check and send notification if needed (once daily or on significant change)
+  /// Check and send notification if needed (once daily + significant change)
+  static bool _isChecking = false;
+
   static Future<void> checkAndNotify() async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastCheckDate = prefs.getString(_lastCheckDateKey);
-    final lastPm25 = prefs.getDouble(_lastPm25Key);
+    // Prevent concurrent calls
+    if (_isChecking) return;
+    _isChecking = true;
 
-    final today = DateTime.now();
-    final todayStr = '${today.year}-${today.month}-${today.day}';
-    final alreadyCheckedToday = lastCheckDate == todayStr;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastCheckDate = prefs.getString(_lastCheckDateKey);
+      final lastPm25 = prefs.getDouble(_lastPm25Key);
 
-    // Fetch current air quality
-    final aqData = await getAirQuality();
-    if (aqData == null) return;
+      final today = DateTime.now();
+      final todayStr = '${today.year}-${today.month}-${today.day}';
+      final alreadyNotifiedToday = lastCheckDate == todayStr;
 
-    final currentPm25 = aqData.pm25;
-    bool shouldNotify = false;
-    String notificationReason = '';
+      // Fetch current air quality
+      final aqData = await getAirQuality();
+      if (aqData == null) return;
 
-    // Check if we should send notification
-    if (!alreadyCheckedToday) {
-      // Daily notification
-      shouldNotify = true;
-      notificationReason = 'Daily air quality update';
-    } else if (lastPm25 != null) {
-      // Check for significant change
-      final change = (currentPm25 - lastPm25).abs();
-      if (change >= _changeThreshold) {
+      bool shouldNotify = false;
+      String notificationReason = '';
+
+      if (!alreadyNotifiedToday) {
+        // Daily notification (first check of the day)
         shouldNotify = true;
-        final direction = currentPm25 > lastPm25 ? 'increased' : 'decreased';
-        notificationReason = 'PM2.5 $direction by ${change.toStringAsFixed(1)}';
+        notificationReason = 'Daily air quality update';
+        await prefs.setString(_lastCheckDateKey, todayStr);
+      } else if (lastPm25 != null) {
+        // Check for significant change (50+ threshold)
+        final change = (aqData.pm25 - lastPm25).abs();
+        if (change >= _changeThreshold) {
+          shouldNotify = true;
+          final direction = aqData.pm25 > lastPm25 ? 'increased' : 'decreased';
+          notificationReason =
+              'PM2.5 $direction by ${change.toStringAsFixed(1)}';
+        }
       }
-    }
 
-    if (shouldNotify) {
-      // Send notification
-      await NotificationService.addNotification(
-        title: 'Air Quality Alert - ${aqData.cityName}',
-        body:
-            'AQI: ${aqData.aqi} (${aqData.aqiLevel})\nPM2.5: ${aqData.pm25.toStringAsFixed(1)} μg/m³\n$notificationReason',
-      );
+      if (shouldNotify) {
+        await NotificationService.addNotification(
+          title: 'Air Quality Alert - ${aqData.cityName}',
+          body:
+              'AQI: ${aqData.aqi} (${aqData.aqiLevel})\nPM2.5: ${aqData.pm25.toStringAsFixed(1)} μg/m³\n$notificationReason',
+        );
+      }
 
-      // Update stored values
-      await prefs.setString(_lastCheckDateKey, todayStr);
-      await prefs.setDouble(_lastPm25Key, currentPm25);
-    } else {
-      // Still update the PM2.5 value for change detection
-      await prefs.setDouble(_lastPm25Key, currentPm25);
+      await prefs.setDouble(_lastPm25Key, aqData.pm25);
+    } finally {
+      _isChecking = false;
     }
   }
 
