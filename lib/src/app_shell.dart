@@ -34,7 +34,7 @@ class _AppShellState extends State<AppShell> {
 
   // Message notifier for badge
   final _messageNotifier = MessageNotifier();
-  
+
   // Timer for checking new messages at AppShell level
   Timer? _messageCheckTimer;
   Map<String, String> _lastKnownMessageIds = {}; // roomId -> lastMessageId
@@ -72,9 +72,8 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _saveLastKnownMessageIds() async {
     final prefs = await SharedPreferences.getInstance();
-    final list = _lastKnownMessageIds.entries
-        .map((e) => '${e.key}:${e.value}')
-        .toList();
+    final list =
+        _lastKnownMessageIds.entries.map((e) => '${e.key}:${e.value}').toList();
     await prefs.setStringList('shell_last_message_ids', list);
   }
 
@@ -83,19 +82,21 @@ class _AppShellState extends State<AppShell> {
     try {
       final rooms = await ChatService.getChatRooms();
       if (!mounted) return;
-      
+
       // Get current user ID from profile API to match message senderId format
       String? currentUserId;
       try {
         final profileData = await AuthService.getProfileMe();
         // Use userId field which matches message senderId format
-        currentUserId = (profileData['userId'] ?? profileData['id'] ?? profileData['_id'])?.toString();
+        currentUserId =
+            (profileData['userId'] ?? profileData['id'] ?? profileData['_id'])
+                ?.toString();
         debugPrint('Current userId for notification check: $currentUserId');
       } catch (e) {
         // Fallback to stored user ID
         currentUserId = await AuthService.getUserId();
       }
-      
+
       // First time - just save all message IDs
       if (_lastKnownMessageIds.isEmpty) {
         for (final room in rooms) {
@@ -106,32 +107,33 @@ class _AppShellState extends State<AppShell> {
         _saveLastKnownMessageIds();
         return;
       }
-      
+
       // Check each room for new messages
       bool hasNewMessages = false;
       for (final room in rooms) {
         if (room.lastMessage != null) {
           final lastKnownId = _lastKnownMessageIds[room.id];
           final currentId = room.lastMessage!.id;
-          
+
           // New message in this room
           if (lastKnownId != currentId) {
             // Update the tracked ID for this room
             _lastKnownMessageIds[room.id] = currentId;
-            
+
             // Skip notification if the sender is the current user
             final senderId = room.lastMessage!.senderId.toString();
-            debugPrint('Message senderId: $senderId, currentUserId: $currentUserId');
+            debugPrint(
+                'Message senderId: $senderId, currentUserId: $currentUserId');
             if (currentUserId != null && senderId == currentUserId.toString()) {
               debugPrint('Skipping notification - own message');
               continue;
             }
-            
+
             hasNewMessages = true;
-            
+
             final senderName = room.lastMessage!.senderName;
             final messageContent = room.lastMessage!.content;
-            
+
             // Show system notification with correct room info
             LocalNotificationService.showMessageNotification(
               senderName: room.eventTitle,
@@ -139,12 +141,12 @@ class _AppShellState extends State<AppShell> {
               roomId: room.id,
               roomName: room.eventTitle,
             );
-            
+
             break; // Only show one notification at a time
           }
         }
       }
-      
+
       if (hasNewMessages) {
         _messageNotifier.setUnreadCount(1);
       }
@@ -189,8 +191,8 @@ class _AppShellState extends State<AppShell> {
             children: [
               const HomePage(),
               const MyBookingPage(),
-              FavoritesPage(key: ValueKey(_favoritesRebuildKey)),
               const MessagesPage(),
+              FavoritesPage(key: ValueKey(_favoritesRebuildKey)),
               const ProfilePage(),
             ],
           ),
@@ -244,10 +246,6 @@ class _AppShellState extends State<AppShell> {
               icon: Icon(Icons.receipt_long_outlined),
               selectedIcon: Icon(Icons.receipt_long),
               label: 'My Booking'),
-          const NavigationDestination(
-              icon: Icon(Icons.favorite_border),
-              selectedIcon: Icon(Icons.favorite),
-              label: 'Favorite'),
           NavigationDestination(
               icon: Badge(
                 isLabelVisible: _messageNotifier.unreadCount > 0,
@@ -259,9 +257,13 @@ class _AppShellState extends State<AppShell> {
               ),
               label: 'Message'),
           const NavigationDestination(
+              icon: Icon(Icons.favorite_border),
+              selectedIcon: Icon(Icons.favorite),
+              label: 'Favorite'),
+          const NavigationDestination(
               icon: Icon(Icons.person_outline),
               selectedIcon: Icon(Icons.person),
-              label: 'My Profile'),
+              label: 'Profile'),
         ],
       ),
     );

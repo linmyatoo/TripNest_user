@@ -84,117 +84,124 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My Profile')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator())
-          else
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Colors.grey[200],
-                  backgroundImage:
-                      _profileImage != null && _profileImage!.isNotEmpty
-                          ? NetworkImage(_profileImage!)
-                          : const AssetImage('assets/images/avatar_jacob.jpg')
-                              as ImageProvider,
-                  onBackgroundImageError: (_, __) {
-                    // Handle image load error silently
-                  },
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text(_username,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 18)),
-                      const SizedBox(height: 2),
-                      Text(_email,
-                          style:
-                              const TextStyle(color: AppColors.textSecondary)),
-                    ])),
-              ],
-            ),
-          const SizedBox(height: 18),
-          const Text('General', style: TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 10),
-          SettingsTile(
-              icon: Icons.edit_outlined,
-              label: 'Edit Profile',
+      // appBar: AppBar(
+      //   leading: const BackButton(),
+      //   title: const Text('My Profile'),
+      // ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator())
+            else
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Colors.grey[200],
+                    backgroundImage:
+                        _profileImage != null && _profileImage!.isNotEmpty
+                            ? NetworkImage(_profileImage!)
+                            : const AssetImage('assets/images/avatar_jacob.jpg')
+                                as ImageProvider,
+                    onBackgroundImageError: (_, __) {
+                      // Handle image load error silently
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(_username,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800, fontSize: 18)),
+                        const SizedBox(height: 2),
+                        Text(_email,
+                            style: const TextStyle(
+                                color: AppColors.textSecondary)),
+                      ])),
+                ],
+              ),
+            const SizedBox(height: 18),
+            const Text('General',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            SettingsTile(
+                icon: Icons.person_outline,
+                label: 'Edit Profile',
+                onTap: () async {
+                  final updated = await Navigator.of(context).push<bool>(
+                      MaterialPageRoute(
+                          builder: (_) => const PersonalDataPage()));
+                  // Refresh profile data if it was updated
+                  if (updated == true && mounted) {
+                    _loadUserData();
+                  }
+                }),
+            const SizedBox(height: 10),
+            SettingsTile(
+                icon: Icons.lock_outline,
+                label: 'Change Password',
+                onTap: () =>
+                    Navigator.of(context).pushNamed(ChangePasswordPage.route)),
+            const SizedBox(height: 10),
+            SettingsTile(
+                icon: Icons.notifications_outlined,
+                label: 'Notifications',
+                onTap: () => Navigator.of(context)
+                    .pushNamed(NotificationsSettingsPage.route)),
+            const SizedBox(height: 10),
+            SettingsTile(
+                icon: Icons.security_outlined,
+                label: 'Security',
+                onTap: () =>
+                    Navigator.of(context).pushNamed(SecurityPage.route)),
+            const SizedBox(height: 18),
+            const Text('Preferences',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            SettingsTile(
+                icon: Icons.policy_outlined,
+                label: 'Legal and Policies',
+                onTap: () =>
+                    Navigator.of(context).pushNamed(PrivacyPolicyPage.route)),
+            const SizedBox(height: 10),
+            SettingsTile(
+                icon: Icons.help_outline,
+                label: 'Help & Support',
+                onTap: () =>
+                    Navigator.of(context).pushNamed(HelpCenterPage.route)),
+            const SizedBox(height: 10),
+            SettingsTile(
+              icon: Icons.logout_rounded,
+              iconColor: const Color(0xFFEF4444),
+              label: 'Logout',
               onTap: () async {
-                final updated = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(
-                        builder: (_) => const PersonalDataPage()));
-                // Refresh profile data if it was updated
-                if (updated == true && mounted) {
-                  _loadUserData();
-                }
-              }),
-          const SizedBox(height: 10),
-          SettingsTile(
-              icon: Icons.settings,
-              label: 'Change Password',
-              onTap: () =>
-                  Navigator.of(context).pushNamed(ChangePasswordPage.route)),
-          const SizedBox(height: 10),
-          SettingsTile(
-              icon: Icons.notifications_outlined,
-              label: 'Notifications',
-              onTap: () => Navigator.of(context)
-                  .pushNamed(NotificationsSettingsPage.route)),
-          const SizedBox(height: 10),
-          SettingsTile(
-              icon: Icons.security_outlined,
-              label: 'Security',
-              onTap: () => Navigator.of(context).pushNamed(SecurityPage.route)),
-          const SizedBox(height: 18),
-          const Text('Preferences',
-              style: TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 10),
-          SettingsTile(
-              icon: Icons.policy_outlined,
-              label: 'Legal and Policies',
-              onTap: () =>
-                  Navigator.of(context).pushNamed(PrivacyPolicyPage.route)),
-          const SizedBox(height: 10),
-          SettingsTile(
-              icon: Icons.help_outline,
-              label: 'Help & Support',
-              onTap: () =>
-                  Navigator.of(context).pushNamed(HelpCenterPage.route)),
-          const SizedBox(height: 10),
-          SettingsTile(
-            icon: Icons.logout_rounded,
-            iconColor: const Color(0xFFEF4444),
-            label: 'Logout',
-            onTap: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (_) => const _LogoutConfirmDialog(),
-              );
-              if (ok == true && mounted) {
-                // Perform logout
-                await AuthService.logout();
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => const _LogoutConfirmDialog(),
+                );
+                if (ok == true && mounted) {
+                  // Perform logout
+                  await AuthService.logout();
 
-                // Only clear saved credentials if Remember Password is disabled
-                final rememberEnabled =
-                    await SecurityService.isRememberPasswordEnabled();
-                if (!rememberEnabled) {
-                  await SecurityService.clearSavedCredentials();
-                }
+                  // Only clear saved credentials if Remember Password is disabled
+                  final rememberEnabled =
+                      await SecurityService.isRememberPasswordEnabled();
+                  if (!rememberEnabled) {
+                    await SecurityService.clearSavedCredentials();
+                  }
 
-                // Navigate to login and remove all previous routes
-                Navigator.pushNamedAndRemoveUntil(
-                    context, '/login', (_) => false);
-              }
-            },
-          ),
-        ],
+                  // Navigate to login and remove all previous routes
+                  Navigator.pushNamedAndRemoveUntil(
+                      context, '/login', (_) => false);
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
