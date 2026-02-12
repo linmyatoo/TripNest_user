@@ -203,7 +203,7 @@ class _MessagesPageState extends State<MessagesPage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(
               decoration: InputDecoration(
-                hintText: 'Search or start new chat',
+                hintText: 'Search your chat',
                 prefixIcon: const Icon(Icons.search),
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(16)),

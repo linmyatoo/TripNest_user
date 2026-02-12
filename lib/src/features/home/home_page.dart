@@ -124,7 +124,8 @@ class _HomePageState extends State<HomePage> {
       Map<String, double> ratings = {};
       List<Event> popularEvents = allEvents;
       if (isLoggedIn) {
-        final uniqueIds = [...allEvents, ...upcomingEvents].map((e) => e.id).toSet();
+        final uniqueIds =
+            [...allEvents, ...upcomingEvents].map((e) => e.id).toSet();
         await Future.wait(
           uniqueIds.map((eventId) async {
             try {
@@ -199,26 +200,24 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         // search bar
                         GestureDetector(
-                          onTap: () => Navigator.of(context)
-                              .pushNamed(AppRoutes.search),
+                          onTap: () =>
+                              Navigator.of(context).pushNamed(AppRoutes.search),
                           child: Container(
                             height: 46,
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(24),
-                              border: Border.all(
-                                  color: const Color(0xFFD1D5DB)),
+                              border:
+                                  Border.all(color: const Color(0xFFD1D5DB)),
                             ),
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 14),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
                             alignment: Alignment.centerLeft,
                             child: const Row(
                               children: [
                                 Icon(Icons.search, color: AppColors.muted),
                                 SizedBox(width: 8),
-                                Text('What would you like me to ask?',
-                                    style:
-                                        TextStyle(color: AppColors.muted)),
+                                Text('Search your events',
+                                    style: TextStyle(color: AppColors.muted)),
                               ],
                             ),
                           ),
@@ -236,8 +235,7 @@ class _HomePageState extends State<HomePage> {
                                 child: Padding(
                                   padding: EdgeInsets.all(32.0),
                                   child: Text('No events available',
-                                      style: TextStyle(
-                                          color: AppColors.muted)),
+                                      style: TextStyle(color: AppColors.muted)),
                                 ),
                               )
                             : SizedBox(

@@ -154,7 +154,11 @@ class _SearchPageState extends State<SearchPage> {
                           value: mood,
                           hint: const Text('Select a mood'),
                           items: const [
-                            DropdownMenuItem(value: 'chill', child: Text('🏖️ Chill')),
+                            DropdownMenuItem(value: 'relaxed', child: Text('🏖️ Relaxed')),
+                            DropdownMenuItem(value: 'excited', child: Text('🤩 Excited')),
+                            // DropdownMenuItem(value: 'chill', child: Text('🏖️ Chill')),
+                            DropdownMenuItem(value: 'energetic', child: Text('⚡ Energetic')),
+                            DropdownMenuItem(value: 'fun', child: Text('😸 Fun')),
                             DropdownMenuItem(value: 'adventure', child: Text('🏔️ Adventure')),
                             DropdownMenuItem(value: 'festival', child: Text('🎉 Festival')),
                             DropdownMenuItem(value: 'cultural', child: Text('🏛️ Cultural')),
