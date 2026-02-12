@@ -258,22 +258,86 @@ class _MessagesPageState extends State<MessagesPage> {
                                   const SizedBox(height: 12),
                               itemBuilder: (context, index) {
                                 final room = _chatRooms[index];
-                                return _chatCell(
-                                  context,
-                                  name: room.eventTitle,
-                                  last: room.lastMessage != null
-                                      ? '${room.lastMessage!.senderName}: ${room.lastMessage!.content}'
-                                      : 'No messages',
-                                  time: room.lastMessage != null
-                                      ? _formatTime(room.lastMessage!.createdAt)
-                                      : '',
-                                  roomId: room.id,
-                                  imageUrl: room.eventImageUrl,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => ChatThreadPage(
-                                        roomId: room.id,
-                                        roomName: room.eventTitle,
+                                return Dismissible(
+                                  key: ValueKey(room.id),
+                                  direction: DismissDirection.endToStart,
+                                  background: Container(
+                                    alignment: Alignment.centerRight,
+                                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment: MainAxisAlignment.end,
+                                      children: [
+                                        Icon(Icons.exit_to_app, color: Colors.white),
+                                        SizedBox(width: 8),
+                                        Text('Leave Chat Room',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            )),
+                                      ],
+                                    ),
+                                  ),
+                                  confirmDismiss: (direction) async {
+                                    // Show confirmation dialog
+                                    return await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        title: const Text('Leave Chat Room'),
+                                        content: const Text('Are you sure you want to leave this chat room?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.of(ctx).pop(false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.of(ctx).pop(true),
+                                            child: const Text('Leave'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                  onDismissed: (direction) async {
+                                    try {
+                                      await ChatService.leaveChatRoom(room.id);
+                                      setState(() {
+                                        _chatRooms.removeAt(index);
+                                      });
+                                    } catch (e) {
+                                      // Optionally show error if not a member
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            e.toString().contains('not a member')
+                                              ? 'You are not a member of this chat room.'
+                                              : 'Failed to leave chat room.',
+                                          ),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: _chatCell(
+                                    context,
+                                    name: room.eventTitle,
+                                    last: room.lastMessage != null
+                                        ? '${room.lastMessage!.senderName}: ${room.lastMessage!.content}'
+                                        : 'No messages',
+                                    time: room.lastMessage != null
+                                        ? _formatTime(room.lastMessage!.createdAt)
+                                        : '',
+                                    roomId: room.id,
+                                    imageUrl: room.eventImageUrl,
+                                    onTap: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => ChatThreadPage(
+                                          roomId: room.id,
+                                          roomName: room.eventTitle,
+                                        ),
                                       ),
                                     ),
                                   ),

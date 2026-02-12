@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/auth_service.dart';
 import '../../core/services/chat_service.dart';
+import '../../core/theme/app_colors.dart';
 import 'messages_page.dart';
 
 class ChatThreadPage extends StatefulWidget {
@@ -37,7 +38,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
     super.initState();
     _scrollController = ScrollController();
     _initializeChat();
-    // Auto-refresh messages every 3 seconds for real-time updates
     _refreshTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       _refreshMessages();
     });
@@ -50,14 +50,12 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
     super.dispose();
   }
 
-  // Silent refresh without loading indicator
   Future<void> _refreshMessages() async {
     if (!mounted || _isSending) return;
     try {
       final messages = await ChatService.getChatMessages(widget.roomId);
       if (!mounted) return;
-      
-      // Only update if there are new messages
+
       if (messages.length != _messages.length) {
         setState(() {
           _messages = messages;
@@ -65,7 +63,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
         _scrollToBottom();
       }
     } catch (e) {
-      // Silent fail on auto-refresh
       debugPrint('Auto-refresh messages error: $e');
     }
   }
@@ -83,7 +80,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   }
 
   Future<void> _initializeChat() async {
-    // Clear unread badge when entering chat
     MessageNotifier().clearUnread();
     await _loadCurrentUser();
     await _loadMessages();
@@ -95,14 +91,11 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
       final userId = await AuthService.getUserId();
       final profileData = await AuthService.getProfileMe();
 
-      // API returns nested data: {data: {...}} or {user: {...}} or direct object
       final user = profileData['data'] ?? profileData['user'] ?? profileData;
 
       debugPrint('=== DEBUG: User data keys: ${user.keys.toList()}');
       debugPrint('=== DEBUG: Local userId from SharedPrefs: $userId');
 
-      // Extract user ID from profile response (same format as API uses in messages)
-      // API uses 'userId' field according to profile page comment
       String? apiUserId;
       if (user['userId'] != null) {
         apiUserId = user['userId'].toString();
@@ -114,7 +107,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
 
       debugPrint('=== DEBUG: Extracted apiUserId: $apiUserId');
 
-      // Extract username from profile response
       String username = 'You';
       if (user['fullName'] != null &&
           user['fullName'].toString().isNotEmpty &&
@@ -130,7 +122,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
 
       if (mounted) {
         setState(() {
-          // Prefer the API's user ID format for consistency with message senderIds
           _currentUserId = apiUserId ?? userId;
           debugPrint('=== DEBUG: Final _currentUserId set to: $_currentUserId');
           _currentUserName = username;
@@ -152,7 +143,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
       final messages = await ChatService.getChatMessages(widget.roomId);
       if (!mounted) return;
 
-      // Extract current user's name from messages
       try {
         final currentUserMessage =
             messages.firstWhere((msg) => msg.senderId == _currentUserId);
@@ -220,13 +210,10 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
       final sentMessage = await ChatService.sendMessage(widget.roomId, content);
       if (!mounted) return;
 
-      // Use the senderId from API response to ensure consistency when reloading
-      // Also update _currentUserId to match the API's format
       if (_currentUserId != sentMessage.senderId) {
         _currentUserId = sentMessage.senderId;
       }
 
-      // Create a new message with the current user's info
       final messageWithName = Message(
         id: sentMessage.id,
         senderId: sentMessage.senderId,
@@ -258,16 +245,18 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
     }
   }
 
+  String _formatTime(DateTime dateTime) {
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.roomName,
-              style: const TextStyle(fontWeight: FontWeight.w700)),
-          const Text('Online',
-              style: TextStyle(fontSize: 12, color: Colors.black54)),
-        ]),
+        title: Text(widget.roomName),
+        centerTitle: true,
         actions: [
           IconButton(
             onPressed: () => _showMembersBottomSheet(),
@@ -288,8 +277,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                             const Icon(Icons.error_outline,
                                 size: 48, color: Colors.grey),
                             const SizedBox(height: 12),
-                            const Text('Error loading messages'),
-                            const SizedBox(height: 8),
                             Text(_errorMessage!,
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(color: Colors.grey)),
@@ -303,65 +290,90 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                         ),
                       )
                     : _messages.isEmpty
-                        ? const Center(child: Text('No messages yet'))
+                        ? const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.chat_bubble_outline,
+                                    size: 48, color: Colors.grey),
+                                SizedBox(height: 12),
+                                Text('No messages yet'),
+                                SizedBox(height: 4),
+                                Text('Start the conversation!',
+                                    style: TextStyle(color: Colors.grey)),
+                              ],
+                            ),
+                          )
                         : ListView.builder(
                             controller: _scrollController,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            padding: const EdgeInsets.all(16),
                             itemCount: _messages.length,
                             itemBuilder: (context, index) {
                               final msg = _messages[index];
-                              // Compare as strings to avoid type mismatch
                               final isMine = msg.senderId.toString() ==
                                   _currentUserId.toString();
                               if (index == 0) {
-                                debugPrint('=== DEBUG: First msg.senderId: "${msg.senderId}"');
-                                debugPrint('=== DEBUG: _currentUserId: "$_currentUserId"');
-                                debugPrint('=== DEBUG: isMine result: $isMine');
+                                debugPrint(
+                                    '=== DEBUG: First msg.senderId: "${msg.senderId}"');
+                                debugPrint(
+                                    '=== DEBUG: _currentUserId: "$_currentUserId"');
+                                debugPrint(
+                                    '=== DEBUG: isMine result: $isMine');
                               }
-                              return _Bubble(
-                                text: msg.content,
+                              return _MessageBubble(
+                                message: msg,
+                                isMe: isMine,
                                 time: _formatTime(msg.createdAt),
-                                senderName: isMine ? null : msg.senderName,
-                                mine: isMine,
                               );
                             },
                           ),
           ),
-          // composer
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          // Message input
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: msgCtrl,
                       decoration: InputDecoration(
-                        hintText: 'Write a reply',
+                        hintText: 'Type a message...',
                         border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24)),
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
                         filled: true,
+                        fillColor: Colors.grey[100],
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                       ),
+                      textCapitalization: TextCapitalization.sentences,
+                      onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  FloatingActionButton.small(
+                  IconButton(
                     onPressed: _isSending ? null : _sendMessage,
-                    child: _isSending
+                    icon: _isSending
                         ? const SizedBox(
                             width: 24,
                             height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                            ),
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.send),
+                        : const Icon(Icons.send, color: AppColors.primary),
                   ),
                 ],
               ),
@@ -370,23 +382,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
         ],
       ),
     );
-  }
-
-  String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inMinutes < 1) {
-      return 'now';
-    }
-    if (difference.inHours < 1) {
-      return '${difference.inMinutes}m';
-    }
-    if (difference.inDays < 1) {
-      return '${difference.inHours}h';
-    }
-
-    return '${dateTime.month}/${dateTime.day}';
   }
 
   void _showMembersBottomSheet() {
@@ -402,7 +397,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
         expand: false,
         builder: (context, controller) => Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -422,7 +416,6 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                 ],
               ),
             ),
-            // Members List
             Expanded(
               child: _isMembersLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -431,10 +424,12 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
                       : ListView.separated(
                           controller: controller,
                           itemCount: _members.length,
-                          separatorBuilder: (context, index) => const Divider(),
+                          separatorBuilder: (context, index) =>
+                              const Divider(),
                           itemBuilder: (context, index) {
                             final member = _members[index];
-                            final isCurrent = member.userId == _currentUserId;
+                            final isCurrent =
+                                member.userId == _currentUserId;
                             return ListTile(
                               leading: CircleAvatar(
                                 child: Text(
@@ -467,79 +462,93 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   }
 }
 
-class _Bubble extends StatelessWidget {
-  const _Bubble({
-    required this.text,
-    required this.time,
-    required this.mine,
-    this.senderName,
-  });
-
-  final String text;
+class _MessageBubble extends StatelessWidget {
+  final Message message;
+  final bool isMe;
   final String time;
-  final bool mine;
-  final String? senderName;
+
+  const _MessageBubble({
+    required this.message,
+    required this.isMe,
+    required this.time,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final color = mine ? const Color(0xFF2563EB) : const Color(0xFFF2F4F7);
-    final textColor = mine ? Colors.white : Colors.black87;
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints: const BoxConstraints(maxWidth: 280),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(14),
-            topRight: const Radius.circular(14),
-            bottomLeft:
-                mine ? const Radius.circular(14) : const Radius.circular(0),
-            bottomRight:
-                mine ? const Radius.circular(0) : const Radius.circular(14),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment:
-              mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            if (senderName != null)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(
-                    radius: 12,
-                    backgroundColor: Colors.grey[400],
-                    child: Text(
-                      senderName![0].toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    senderName!,
-                    style: TextStyle(
-                      color: textColor.withValues(alpha: 0.7),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment:
+            isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          if (!isMe)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Text(
+                message.senderName,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey,
+                ),
               ),
-            if (senderName != null) const SizedBox(height: 4),
-            Text(text, style: TextStyle(color: textColor)),
-            const SizedBox(height: 4),
-            Text(time,
-                style: TextStyle(
-                    color: textColor.withValues(alpha: .8), fontSize: 11)),
-          ],
-        ),
+            ),
+          Row(
+            mainAxisAlignment:
+                isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            children: [
+              if (!isMe) ...[
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: AppColors.primary.withOpacity(0.1),
+                  child: Text(
+                    message.senderName.isNotEmpty
+                        ? message.senderName[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isMe ? AppColors.primary : Colors.grey[200],
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(16),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: Radius.circular(isMe ? 16 : 4),
+                      bottomRight: Radius.circular(isMe ? 4 : 16),
+                    ),
+                  ),
+                  child: Text(
+                    message.content,
+                    style: TextStyle(
+                      color: isMe ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: EdgeInsets.only(
+              top: 4,
+              left: isMe ? 0 : 40,
+              right: isMe ? 4 : 0,
+            ),
+            child: Text(
+              time,
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ),
+        ],
       ),
     );
   }

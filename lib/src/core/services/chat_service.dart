@@ -127,6 +127,37 @@ class Member {
 }
 
 class ChatService {
+    /// Leave a chat room
+    static Future<void> leaveChatRoom(String roomId) async {
+      try {
+        final token = await AuthService.getToken();
+        if (token == null) {
+          throw Exception('Not authenticated');
+        }
+
+        final response = await http.post(
+          Uri.parse('$baseUrl/chat/rooms/$roomId/leave'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          // Successfully left the chat room
+          return;
+        } else if (response.statusCode == 403) {
+          throw Exception('You are not a member of this chat room');
+        } else {
+          throw Exception('Failed to leave chat room');
+        }
+      } catch (e) {
+        if (e.toString().contains('Exception:')) {
+          rethrow;
+        }
+        throw Exception('Network error: ${e.toString()}');
+      }
+    }
   static const String baseUrl = 'https://naylinhtet.me/api';
 
   /// Get all chat rooms user is a member of

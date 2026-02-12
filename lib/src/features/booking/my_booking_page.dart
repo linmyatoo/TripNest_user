@@ -20,7 +20,7 @@ class _MyBookingPageState extends State<MyBookingPage> {
   String? _errorMessage;
   String? _completedError;
   List<_BookingEntry> _upcomingBookings = const [];
-  List<Event> _completedEvents = const [];
+  List<_CompletedEntry> _completedEntries = const [];
 
   @override
   void initState() {
@@ -192,7 +192,7 @@ class _MyBookingPageState extends State<MyBookingPage> {
       ];
     }
 
-    if (_completedEvents.isEmpty) {
+    if (_completedEntries.isEmpty) {
       return const [
         SizedBox(
           height: 160,
@@ -204,20 +204,19 @@ class _MyBookingPageState extends State<MyBookingPage> {
       ];
     }
 
-    final completed = _completedEvents;
     return List.generate(
-      completed.length,
+      _completedEntries.length,
       (i) {
-        final e = completed[i];
+        final entry = _completedEntries[i];
         return _CompletedBookingTile(
-          event: e,
+          event: entry.event,
           trailing: TextButton(
-            onPressed: () =>
-                Navigator.pushNamed(context, AppRoutes.review, arguments: e.id),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.review,
+                arguments: entry.event.id),
             child: const Text('Write a review'),
           ),
           onTap: () => Navigator.pushNamed(context, AppRoutes.eventDetails,
-              arguments: e.id),
+              arguments: entry.event.id),
         );
       },
     );
@@ -243,6 +242,13 @@ class _MyBookingPageState extends State<MyBookingPage> {
         }
         entries.add(_BookingEntry(booking: booking, event: event));
       }
+
+      // Sort upcoming by event date ascending (soonest event first)
+      entries.sort((a, b) {
+        final dateA = a.event?.date ?? a.booking.createdAt;
+        final dateB = b.event?.date ?? b.booking.createdAt;
+        return dateA.compareTo(dateB);
+      });
 
       if (!mounted) return;
       setState(() {
@@ -270,33 +276,24 @@ class _MyBookingPageState extends State<MyBookingPage> {
       final completedBookings = bookings.where((b) => !b.isUpcoming).toList();
 
       // Fetch event details for each completed booking
-      final completedEvents = <Event>[];
+      final completedEntries = <_CompletedEntry>[];
       for (final booking in completedBookings) {
         try {
           final event = await EventService.getEventById(booking.eventId);
-          completedEvents.add(event);
+          completedEntries
+              .add(_CompletedEntry(booking: booking, event: event));
         } catch (e) {
           debugPrint('Failed to load event ${booking.eventId}: $e');
         }
       }
 
-      // Also add upcoming bookings for testing reviews
-      final upcomingBookings = bookings.where((b) => b.isUpcoming).toList();
-      for (final booking in upcomingBookings) {
-        try {
-          final event = await EventService.getEventById(booking.eventId);
-          completedEvents.add(event);
-        } catch (e) {
-          debugPrint('Failed to load event ${booking.eventId}: $e');
-        }
-      }
-
-      // Sort by date (most recent first)
-      completedEvents.sort((a, b) => b.date.compareTo(a.date));
+      // Sort by booking createdAt descending (last booked appears at the top)
+      completedEntries.sort(
+          (a, b) => b.booking.createdAt.compareTo(a.booking.createdAt));
 
       if (!mounted) return;
       setState(() {
-        _completedEvents = completedEvents;
+        _completedEntries = completedEntries;
         _completedLoading = false;
       });
     } catch (e) {
@@ -453,6 +450,12 @@ class _BookingEntry {
   final Booking booking;
   final Event? event;
   const _BookingEntry({required this.booking, required this.event});
+}
+
+class _CompletedEntry {
+  final Booking booking;
+  final Event event;
+  const _CompletedEntry({required this.booking, required this.event});
 }
 
 class _UpcomingBookingTile extends StatelessWidget {

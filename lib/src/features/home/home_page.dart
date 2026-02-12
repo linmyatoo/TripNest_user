@@ -412,7 +412,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ],
                       ),
-                      child: Text('${e.priceBaht}B/Person',
+                      child: Text('${e.priceBaht}฿ /Person',
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             color: Colors.white,

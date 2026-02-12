@@ -130,7 +130,7 @@ class EventCard extends StatelessWidget {
                           ],
                         ),
                         child: Text(
-                          '${event.priceBaht}B/Person',
+                          '${event.priceBaht}฿ /Person',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

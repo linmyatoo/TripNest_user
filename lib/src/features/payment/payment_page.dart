@@ -224,10 +224,21 @@ class _PaymentPageState extends State<PaymentPage> {
     setState(() => _isSubmitting = true);
 
     try {
-      await BookingService.createBooking(
+      // Create booking and get bookingId
+      final booking = await BookingService.createBooking(
         eventId: event.id,
         ticketCounts: personCount,
       );
+      final bookingId = booking?.id ?? widget.bookingId;
+
+      // Confirm the booking if bookingId is available
+      if (bookingId != null) {
+        try {
+          await BookingService.confirmBooking(bookingId);
+        } catch (e) {
+          print('❌ Booking confirmation error: $e');
+        }
+      }
 
       // Trigger local notification with sound and vibration
       print('📢 Triggering notification for: ${event.title}');
