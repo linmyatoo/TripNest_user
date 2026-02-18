@@ -15,18 +15,18 @@ class MyBookingPage extends StatefulWidget {
 
 class _MyBookingPageState extends State<MyBookingPage> {
   bool showUpcoming = true;
+
+  // Single loading state for both sections — we load everything at once.
   bool _isLoading = false;
-  bool _completedLoading = false;
   String? _errorMessage;
-  String? _completedError;
+
   List<_BookingEntry> _upcomingBookings = const [];
   List<_CompletedEntry> _completedEntries = const [];
 
   @override
   void initState() {
     super.initState();
-    _loadUpcomingBookings();
-    _loadCompletedEvents();
+    _loadAllBookings();
   }
 
   @override
@@ -66,11 +66,15 @@ class _MyBookingPageState extends State<MyBookingPage> {
           const SizedBox(height: 12),
           ...(showUpcoming
               ? _buildUpcomingSection(context)
-              : _buildCompletedSection()),
+              : _buildCompletedSection(context)),
         ],
       ),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Section builders
+  // ---------------------------------------------------------------------------
 
   List<Widget> _buildUpcomingSection(BuildContext context) {
     if (_isLoading) {
@@ -83,38 +87,7 @@ class _MyBookingPageState extends State<MyBookingPage> {
     }
 
     if (_errorMessage != null) {
-      return [
-        Container(
-          margin: const EdgeInsets.only(top: 8),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border.withValues(alpha: 0.3)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 42),
-              const SizedBox(height: 8),
-              const Text('Unable to load bookings',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _loadUpcomingBookings,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              )
-            ],
-          ),
-        )
-      ];
+      return [_errorCard(_errorMessage!, _loadAllBookings)];
     }
 
     if (_upcomingBookings.isEmpty) {
@@ -147,8 +120,8 @@ class _MyBookingPageState extends State<MyBookingPage> {
         .toList();
   }
 
-  List<Widget> _buildCompletedSection() {
-    if (_completedLoading) {
+  List<Widget> _buildCompletedSection(BuildContext context) {
+    if (_isLoading) {
       return const [
         SizedBox(
           height: 160,
@@ -157,39 +130,8 @@ class _MyBookingPageState extends State<MyBookingPage> {
       ];
     }
 
-    if (_completedError != null) {
-      return [
-        Container(
-          margin: const EdgeInsets.only(top: 8),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border.withValues(alpha: 0.3)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 42),
-              const SizedBox(height: 8),
-              const Text('Unable to load completed events',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(
-                _completedError!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: _loadCompletedEvents,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              )
-            ],
-          ),
-        )
-      ];
+    if (_errorMessage != null) {
+      return [_errorCard(_errorMessage!, _loadAllBookings)];
     }
 
     if (_completedEntries.isEmpty) {
@@ -222,37 +164,64 @@ class _MyBookingPageState extends State<MyBookingPage> {
     );
   }
 
-  Future<void> _loadUpcomingBookings() async {
+  // ---------------------------------------------------------------------------
+  // Data loading — single source of truth
+  // ---------------------------------------------------------------------------
+
+  /// Loads all bookings once, fetches their event details, then splits them
+  /// into upcoming vs completed based on the event date vs today's date.
+  Future<void> _loadAllBookings() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final bookings = await BookingService.getMyBookings();
-      final upcoming = bookings.where((b) => b.isUpcoming).toList();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day); // midnight today
 
-      final entries = <_BookingEntry>[];
-      for (final booking in upcoming) {
+      final bookings = await BookingService.getMyBookings();
+
+      final upcoming = <_BookingEntry>[];
+      final completed = <_CompletedEntry>[];
+
+      for (final booking in bookings) {
         Event? event;
         try {
           event = await EventService.getEventById(booking.eventId);
         } catch (e) {
           debugPrint('Failed to load event ${booking.eventId}: $e');
         }
-        entries.add(_BookingEntry(booking: booking, event: event));
+
+        // Determine bucket using the event date (client-side, real-time).
+        // If the event detail couldn't be loaded, fall back to the server flag.
+        final bool isUpcoming = event != null
+            ? !event.date.isBefore(today) // event date >= today → upcoming
+            : booking.isUpcoming;
+
+        if (isUpcoming) {
+          upcoming.add(_BookingEntry(booking: booking, event: event));
+        } else if (event != null) {
+          // Only add to completed when we have the full event object.
+          completed.add(_CompletedEntry(booking: booking, event: event));
+        }
       }
 
-      // Sort upcoming by event date ascending (soonest event first)
-      entries.sort((a, b) {
+      // Upcoming: soonest event first (ascending).
+      upcoming.sort((a, b) {
         final dateA = a.event?.date ?? a.booking.createdAt;
         final dateB = b.event?.date ?? b.booking.createdAt;
         return dateA.compareTo(dateB);
       });
 
+      // Completed: most recently booked first (descending by booking date).
+      completed.sort(
+          (a, b) => b.booking.createdAt.compareTo(a.booking.createdAt));
+
       if (!mounted) return;
       setState(() {
-        _upcomingBookings = entries;
+        _upcomingBookings = upcoming;
+        _completedEntries = completed;
         _isLoading = false;
       });
     } catch (e) {
@@ -264,45 +233,41 @@ class _MyBookingPageState extends State<MyBookingPage> {
     }
   }
 
-  Future<void> _loadCompletedEvents() async {
-    setState(() {
-      _completedLoading = true;
-      _completedError = null;
-    });
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
 
-    try {
-      // Get user's bookings and filter for completed ones
-      final bookings = await BookingService.getMyBookings();
-      final completedBookings = bookings.where((b) => !b.isUpcoming).toList();
-
-      // Fetch event details for each completed booking
-      final completedEntries = <_CompletedEntry>[];
-      for (final booking in completedBookings) {
-        try {
-          final event = await EventService.getEventById(booking.eventId);
-          completedEntries
-              .add(_CompletedEntry(booking: booking, event: event));
-        } catch (e) {
-          debugPrint('Failed to load event ${booking.eventId}: $e');
-        }
-      }
-
-      // Sort by booking createdAt descending (last booked appears at the top)
-      completedEntries.sort(
-          (a, b) => b.booking.createdAt.compareTo(a.booking.createdAt));
-
-      if (!mounted) return;
-      setState(() {
-        _completedEntries = completedEntries;
-        _completedLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _completedLoading = false;
-        _completedError = e.toString().replaceFirst('Exception: ', '');
-      });
-    }
+  Widget _errorCard(String message, VoidCallback onRetry) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red, size: 42),
+          const SizedBox(height: 8),
+          const Text('Unable to load bookings',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.muted),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _pill(
@@ -325,126 +290,9 @@ class _MyBookingPageState extends State<MyBookingPage> {
   }
 }
 
-class _CompletedBookingTile extends StatelessWidget {
-  const _CompletedBookingTile({required this.event, this.trailing, this.onTap});
-  static const double _minTileHeight = 118;
-  final Event event;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = event.date;
-    final day = d.day.toString().padLeft(2, '0');
-    final mon = const [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ][d.month - 1];
-
-    final heroImage = event.primaryImage;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: _minTileHeight),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 50,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF4F6F8),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(day,
-                            style: const TextStyle(
-                                fontSize: 17, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 2),
-                        Text(mon,
-                            style: const TextStyle(
-                                fontSize: 11, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Container(
-                    width: 92,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Image.network(
-                      heroImage,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const _ImagePlaceholder();
-                      },
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return const _ImagePlaceholder(isLoading: true);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(event.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 2),
-                        Text(event.shortLocation,
-                            style: const TextStyle(
-                                color: AppColors.textSecondary)),
-                        if (trailing != null) ...[
-                          const SizedBox(height: 6),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: trailing!,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// =============================================================================
+// Internal data models
+// =============================================================================
 
 class _BookingEntry {
   final Booking booking;
@@ -457,6 +305,10 @@ class _CompletedEntry {
   final Event event;
   const _CompletedEntry({required this.booking, required this.event});
 }
+
+// =============================================================================
+// Tile widgets
+// =============================================================================
 
 class _UpcomingBookingTile extends StatelessWidget {
   const _UpcomingBookingTile({
@@ -473,18 +325,8 @@ class _UpcomingBookingTile extends StatelessWidget {
 
   static const double _minTileHeight = 118;
   static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec'
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
   @override
@@ -529,7 +371,8 @@ class _UpcomingBookingTile extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(mon,
                             style: const TextStyle(
-                                fontSize: 11, color: AppColors.textSecondary)),
+                                fontSize: 11,
+                                color: AppColors.textSecondary)),
                       ],
                     ),
                   ),
@@ -549,11 +392,10 @@ class _UpcomingBookingTile extends StatelessWidget {
                       return Image.network(
                         heroImage,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const _ImagePlaceholder();
-                        },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
+                        errorBuilder: (_, __, ___) =>
+                            const _ImagePlaceholder(),
+                        loadingBuilder: (_, child, progress) {
+                          if (progress == null) return child;
                           return const _ImagePlaceholder(isLoading: true);
                         },
                       );
@@ -576,8 +418,8 @@ class _UpcomingBookingTile extends StatelessWidget {
                         Text(
                           event?.shortLocation ??
                               'Event ID: ${booking.eventId}',
-                          style:
-                              const TextStyle(color: AppColors.textSecondary),
+                          style: const TextStyle(
+                              color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 6),
                         Row(
@@ -586,8 +428,8 @@ class _UpcomingBookingTile extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color:
-                                    AppColors.primary.withValues(alpha: 0.12),
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
@@ -619,6 +461,119 @@ class _UpcomingBookingTile extends StatelessWidget {
                             ),
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompletedBookingTile extends StatelessWidget {
+  const _CompletedBookingTile(
+      {required this.event, this.trailing, this.onTap});
+
+  static const double _minTileHeight = 118;
+  final Event event;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = event.date;
+    final day = d.day.toString().padLeft(2, '0');
+    final mon = const [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ][d.month - 1];
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: _minTileHeight),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 50,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF4F6F8),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(day,
+                            style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(mon,
+                            style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    width: 92,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Image.network(
+                      event.primaryImage,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const _ImagePlaceholder(),
+                      loadingBuilder: (_, child, progress) {
+                        if (progress == null) return child;
+                        return const _ImagePlaceholder(isLoading: true);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(event.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(event.shortLocation,
+                            style: const TextStyle(
+                                color: AppColors.textSecondary)),
+                        if (trailing != null) ...[
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: trailing!,
+                          ),
+                        ],
                       ],
                     ),
                   ),
