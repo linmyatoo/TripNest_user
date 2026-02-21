@@ -4,6 +4,32 @@ import 'package:http/http.dart' as http;
 
 import '../../models/event.dart';
 
+/// Pairs an [Event] with its live ticket availability data so callers can
+/// compute booking percentages without making a second network call.
+class EventAvailability {
+  final Event event;
+
+  /// Number of confirmed bookings (from the availability API).
+  final int bookedTickets;
+
+  /// Total capacity of the event.
+  final int capacity;
+
+  /// Whether every ticket has been sold.
+  final bool isFullyBooked;
+
+  const EventAvailability({
+    required this.event,
+    required this.bookedTickets,
+    required this.capacity,
+    required this.isFullyBooked,
+  });
+
+  /// Percentage of tickets that have been booked (0–100).
+  double get bookedPercentage =>
+      capacity > 0 ? (bookedTickets / capacity) * 100 : 0;
+}
+
 class EventService {
   static const String baseUrl = 'https://naylinhtet.me/api';
 
@@ -16,9 +42,7 @@ class EventService {
 
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       print('Response status: ${response.statusCode}');
@@ -36,7 +60,7 @@ class EventService {
     }
   }
 
-  /// Fetch upcoming events (future dates, sorted ascending)
+  /// Fetch upcoming events (future dates, sorted ascending by date).
   static Future<List<Event>> getUpcomingEvents() async {
     try {
       final url = Uri.parse('$baseUrl/events/upcoming');
@@ -45,9 +69,7 @@ class EventService {
 
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       print('Response status: ${response.statusCode}');
@@ -65,6 +87,71 @@ class EventService {
     }
   }
 
+  /// Fetch events with ticket availability data.
+  ///
+  /// Returns a flat list of [EventAvailability] objects that contain both the
+  /// [Event] model and the raw booking numbers (`bookedTickets`, `capacity`).
+  /// Fully-booked events are included and flagged via [EventAvailability.isFullyBooked].
+  ///
+  /// GET /api/events/tickets/availability
+  static Future<List<EventAvailability>> getEventsByTicketAvailability() async {
+    try {
+      final url = Uri.parse('$baseUrl/events/tickets/availability');
+
+      print('Fetching ticket availability from: $url');
+
+      final response = await http.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      print('Ticket availability status: ${response.statusCode}');
+      print('Ticket availability body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+
+        final sortedRaw =
+            (body['eventsSortedByAvailability'] as List<dynamic>?) ?? [];
+        final fullyBookedRaw =
+            (body['fullyBookedEvents'] as List<dynamic>?) ?? [];
+
+        EventAvailability _fromSorted(dynamic raw) {
+          final map = raw as Map<String, dynamic>;
+          final capacity = (map['capacity'] as num?)?.toInt() ?? 0;
+          final booked = (map['bookedTickets'] as num?)?.toInt() ?? 0;
+          return EventAvailability(
+            event: Event.fromJson(map),
+            bookedTickets: booked,
+            capacity: capacity,
+            isFullyBooked: false,
+          );
+        }
+
+        EventAvailability _fromFullyBooked(dynamic raw) {
+          final map = raw as Map<String, dynamic>;
+          final capacity = (map['capacity'] as num?)?.toInt() ?? 0;
+          return EventAvailability(
+            event: Event.fromJson(map),
+            bookedTickets: capacity, // fully booked → booked == capacity
+            capacity: capacity,
+            isFullyBooked: true,
+          );
+        }
+
+        return [
+          ...sortedRaw.map(_fromSorted),
+          ...fullyBookedRaw.map(_fromFullyBooked),
+        ];
+      } else {
+        throw Exception('Failed to load ticket availability');
+      }
+    } catch (e) {
+      print('Error fetching ticket availability: $e');
+      throw Exception('Network error: ${e.toString()}');
+    }
+  }
+
   /// Fetch a single event by ID
   static Future<Event> getEventById(String id) async {
     try {
@@ -74,9 +161,7 @@ class EventService {
 
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       print('Response status: ${response.statusCode}');
@@ -112,15 +197,14 @@ class EventService {
         queryParams['mood'] = mood;
       }
 
-      final url = Uri.parse('$baseUrl/events/search').replace(queryParameters: queryParams);
+      final url = Uri.parse('$baseUrl/events/search')
+          .replace(queryParameters: queryParams);
 
       print('Searching events from: $url');
 
       final response = await http.get(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
       );
 
       print('Search response status: ${response.statusCode}');

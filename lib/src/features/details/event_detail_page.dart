@@ -30,6 +30,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
   List<Review> _reviews = [];
   double? _averageRating;
 
+  // Ticket availability
+  int? _availableTickets;
+  int? _capacity;
+
   @override
   void initState() {
     super.initState();
@@ -37,6 +41,27 @@ class _EventDetailPageState extends State<EventDetailPage> {
     _checkFavoriteStatus();
     _loadReviews();
     _loadAverageRating();
+    _loadAvailability();
+  }
+
+  /// Fetch ticket availability for this specific event from the availability API.
+  Future<void> _loadAvailability() async {
+    try {
+      final all = await EventService.getEventsByTicketAvailability();
+      final match = all.where((a) => a.event.id == widget.eventId);
+      if (match.isNotEmpty && mounted) {
+        final entry = match.first;
+        setState(() {
+          _availableTickets = entry.isFullyBooked
+              ? 0
+              : entry.capacity - entry.bookedTickets;
+          _capacity = entry.capacity;
+        });
+      }
+    } catch (e) {
+      // Non-critical — silently ignore so the rest of the page still loads.
+      debugPrint('Error loading availability: $e');
+    }
   }
 
   Widget _photoCarousel(Event event) {
@@ -70,7 +95,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     if (loadingProgress == null) return child;
                     return Container(
                       color: Colors.grey[200],
-                      child: const Center(child: CircularProgressIndicator()),
+                      child:
+                          const Center(child: CircularProgressIndicator()),
                     );
                   },
                 );
@@ -108,48 +134,35 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
   Future<void> _checkFavoriteStatus() async {
     final isFav = await FavoriteService.isFavorite(widget.eventId);
-    if (mounted) {
-      setState(() {
-        _isFavorite = isFav;
-      });
-    }
+    if (mounted) setState(() => _isFavorite = isFav);
   }
 
   Future<void> _loadReviews() async {
     final reviews = await ReviewService.getEventReviews(widget.eventId);
-    if (mounted) {
-      setState(() {
-        _reviews = reviews;
-      });
-    }
+    if (mounted) setState(() => _reviews = reviews);
   }
 
   Future<void> _loadAverageRating() async {
-    final rating = await ReviewService.getEventAverageRating(widget.eventId);
-    if (mounted) {
-      setState(() {
-        _averageRating = rating;
-      });
-    }
+    final rating =
+        await ReviewService.getEventAverageRating(widget.eventId);
+    if (mounted) setState(() => _averageRating = rating);
   }
 
   Future<void> _toggleFavorite() async {
-    print('Toggling favorite for event ID: ${widget.eventId}'); // Debug log
-    final newStatus = await FavoriteService.toggleFavorite(widget.eventId);
-    print('New favorite status: $newStatus'); // Debug log
+    print('Toggling favorite for event ID: ${widget.eventId}');
+    final newStatus =
+        await FavoriteService.toggleFavorite(widget.eventId);
+    print('New favorite status: $newStatus');
 
-    // Verify it was saved
     final savedIds = await FavoriteService.getFavoriteIds();
-    print('Current saved favorite IDs: $savedIds'); // Debug log
+    print('Current saved favorite IDs: $savedIds');
 
     if (mounted) {
-      setState(() {
-        _isFavorite = newStatus;
-      });
+      setState(() => _isFavorite = newStatus);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(newStatus ? 'Added to favorites' : 'Removed from favorites'),
+          content: Text(
+              newStatus ? 'Added to favorites' : 'Removed from favorites'),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -188,10 +201,13 @@ class _EventDetailPageState extends State<EventDetailPage> {
                             photoUrl,
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) {
-                              return const Icon(Icons.image_not_supported,
-                                  color: Colors.white, size: 60);
+                              return const Icon(
+                                  Icons.image_not_supported,
+                                  color: Colors.white,
+                                  size: 60);
                             },
-                            loadingBuilder: (context, child, loadingProgress) {
+                            loadingBuilder:
+                                (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
                               return const CircularProgressIndicator(
                                   color: Colors.white, strokeWidth: 2);
@@ -206,7 +222,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
                     right: 24,
                     child: IconButton(
                       icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      onPressed: () =>
+                          Navigator.of(dialogContext).pop(),
                     ),
                   ),
                   if (photos.length > 1)
@@ -216,11 +233,14 @@ class _EventDetailPageState extends State<EventDetailPage> {
                       right: 0,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(photos.length, (index) {
+                        children:
+                            List.generate(photos.length, (index) {
                           final isActive = index == currentIndex;
                           return AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            duration:
+                                const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.symmetric(
+                                horizontal: 4),
                             width: isActive ? 18 : 8,
                             height: 6,
                             decoration: BoxDecoration(
@@ -253,11 +273,11 @@ class _EventDetailPageState extends State<EventDetailPage> {
                 final rating = _averageRating!;
                 IconData icon;
                 if (i < rating.floor()) {
-                  icon = Icons.star; // Full star
+                  icon = Icons.star;
                 } else if (i < rating && rating - i >= 0.5) {
-                  icon = Icons.star_half; // Half star
+                  icon = Icons.star_half;
                 } else {
-                  icon = Icons.star_border; // Empty star
+                  icon = Icons.star_border;
                 }
                 return Icon(icon, color: Colors.amber, size: 20);
               }),
@@ -265,16 +285,12 @@ class _EventDetailPageState extends State<EventDetailPage> {
               Text(
                 _averageRating!.toStringAsFixed(1),
                 style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+                    fontSize: 16, fontWeight: FontWeight.w700),
               ),
               Text(
                 ' (${_reviews.length} reviews)',
                 style: const TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 14,
-                ),
+                    color: AppColors.muted, fontSize: 14),
               ),
             ],
           ),
@@ -284,8 +300,72 @@ class _EventDetailPageState extends State<EventDetailPage> {
           const Text('No reviews yet.',
               style: TextStyle(color: AppColors.muted))
         else
-          ...(_reviews.take(3).map((review) => _ReviewTile(review: review))),
+          ...(_reviews
+              .take(3)
+              .map((review) => _ReviewTile(review: review))),
       ],
+    );
+  }
+
+  /// Availability badge shown above the event title.
+  Widget _buildAvailabilityBadge() {
+    if (_availableTickets == null) return const SizedBox.shrink();
+
+    final isFullyBooked = _availableTickets == 0;
+    final isLowStock =
+        !isFullyBooked && _capacity != null && _availableTickets! <= 10;
+
+    final Color bgColor;
+    final Color textColor;
+    final IconData icon;
+    final String label;
+
+    if (isFullyBooked) {
+      bgColor = const Color(0xFFFFE4E4);
+      textColor = const Color(0xFFDC2626);
+      icon = Icons.event_busy_outlined;
+      label = 'Fully Booked';
+    } else if (isLowStock) {
+      bgColor = const Color(0xFFFFF3CD);
+      textColor = const Color(0xFFB45309);
+      icon = Icons.local_fire_department_outlined;
+      label = 'Only $_availableTickets seats left!';
+    } else {
+      bgColor = const Color(0xFFDCFCE7);
+      textColor = const Color(0xFF16A34A);
+      icon = Icons.confirmation_num_outlined;
+      label = '$_availableTickets seats available';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 15, color: textColor),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -314,9 +394,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
   void _restartAutoSlide() {
     _autoSlideTimer?.cancel();
     final photos = _event?.photoGallery ?? [];
-    if (photos.length <= 1) {
-      return;
-    }
+    if (photos.length <= 1) return;
 
     if (_photoController.hasClients) {
       _photoController.jumpToPage(0);
@@ -328,7 +406,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
       });
     }
 
-    _autoSlideTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    _autoSlideTimer =
+        Timer.periodic(const Duration(seconds: 4), (_) {
       if (!_photoController.hasClients) return;
       final photosLength = _event?.photoGallery.length ?? 0;
       if (photosLength <= 1) return;
@@ -374,10 +453,12 @@ class _EventDetailPageState extends State<EventDetailPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const Icon(Icons.error_outline,
+                  size: 64, color: Colors.red),
               const SizedBox(height: 16),
               const Text('Error loading event',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(_errorMessage ?? 'Event not found',
                   textAlign: TextAlign.center,
@@ -404,7 +485,8 @@ class _EventDetailPageState extends State<EventDetailPage> {
             onPressed: () => Navigator.pop(context)),
         actions: [
           IconButton(
-            icon: Icon(_isFavorite ? Icons.favorite : Icons.favorite_border,
+            icon: Icon(
+                _isFavorite ? Icons.favorite : Icons.favorite_border,
                 color: _isFavorite ? Colors.red : null),
             onPressed: _toggleFavorite,
           )
@@ -420,10 +502,12 @@ class _EventDetailPageState extends State<EventDetailPage> {
               alignment: Alignment.centerLeft,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                  color: Colors.white, borderRadius: BorderRadius.circular(14)),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14)),
               child: RichText(
                 text: TextSpan(
-                    style: const TextStyle(color: AppColors.textSecondary),
+                    style: const TextStyle(
+                        color: AppColors.textSecondary),
                     children: [
                       const TextSpan(text: 'Price  '),
                       TextSpan(
@@ -442,7 +526,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
               onPressed: () => Navigator.pushNamed(
                 context,
                 AppRoutes.payment,
-                arguments: {'event': event, 'personCount': _personCount},
+                arguments: {
+                  'event': event,
+                  'personCount': _personCount
+                },
               ),
             )),
           ],
@@ -457,127 +544,147 @@ class _EventDetailPageState extends State<EventDetailPage> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(event.title,
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 6),
-              Row(children: [
-                const Icon(Icons.place_outlined,
-                    size: 16, color: AppColors.muted),
-                const SizedBox(width: 6),
-                Text(event.location,
-                    style: const TextStyle(color: AppColors.muted)),
-              ]),
-              const SizedBox(height: 16),
-              const Text('Details',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              Text(event.description * 2), // doubled to mimic long text for now
-              const SizedBox(height: 16),
-              const Text('Reviews',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              _buildReviewsSection(),
-              const SizedBox(height: 16),
-              const Text('Gallery',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 72,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: event.photoGallery.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (_, i) {
-                    final url = event.photoGallery[i];
-                    return GestureDetector(
-                      onTap: () => _showFullImage(url),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.network(
-                          url,
-                          width: 100,
-                          height: 72,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Available seats badge (above title) ──────────────
+                  _buildAvailabilityBadge(),
+
+                  Text(event.title,
+                      style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    const Icon(Icons.place_outlined,
+                        size: 16, color: AppColors.muted),
+                    const SizedBox(width: 6),
+                    Text(event.location,
+                        style:
+                            const TextStyle(color: AppColors.muted)),
+                  ]),
+                  const SizedBox(height: 16),
+                  const Text('Details',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  Text(event.description * 2),
+                  const SizedBox(height: 16),
+                  const Text('Reviews',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  _buildReviewsSection(),
+                  const SizedBox(height: 16),
+                  const Text('Gallery',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 72,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: event.photoGallery.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(width: 10),
+                      itemBuilder: (_, i) {
+                        final url = event.photoGallery[i];
+                        return GestureDetector(
+                          onTap: () => _showFullImage(url),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              url,
                               width: 100,
                               height: 72,
-                              color: Colors.grey[300],
-                              child: const Icon(Icons.image_not_supported,
-                                  color: Colors.grey, size: 30),
-                            );
-                          },
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              width: 100,
-                              height: 72,
-                              color: Colors.grey[200],
-                              child: const Center(
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2)),
-                            );
-                          },
+                              fit: BoxFit.cover,
+                              errorBuilder:
+                                  (context, error, stackTrace) {
+                                return Container(
+                                  width: 100,
+                                  height: 72,
+                                  color: Colors.grey[300],
+                                  child: const Icon(
+                                      Icons.image_not_supported,
+                                      color: Colors.grey,
+                                      size: 30),
+                                );
+                              },
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                if (loadingProgress == null)
+                                  return child;
+                                return Container(
+                                  width: 100,
+                                  height: 72,
+                                  color: Colors.grey[200],
+                                  child: const Center(
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2)),
+                                );
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Location',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                        height: 140,
+                        color: const Color(0xFFEAF0F6),
+                        alignment: Alignment.center,
+                        child: const Text('Map Placeholder')),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                          color: AppColors.border
+                              .withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_outline,
+                            color: AppColors.muted),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text('Number of Persons',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600)),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-              // map placeholder
-              const Text('Location',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                    height: 140,
-                    color: const Color(0xFFEAF0F6),
-                    alignment: Alignment.center,
-                    child: const Text('Map Placeholder')),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: AppColors.border.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.person_outline, color: AppColors.muted),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text('Number of Persons',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
+                        _CounterButton(
+                          icon: Icons.remove,
+                          onTap: _personCount > 1
+                              ? () =>
+                                  setState(() => _personCount -= 1)
+                              : null,
+                        ),
+                        SizedBox(
+                          width: 40,
+                          child: Text('$_personCount',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                        _CounterButton(
+                          icon: Icons.add,
+                          onTap: () =>
+                              setState(() => _personCount += 1),
+                        ),
+                      ],
                     ),
-                    _CounterButton(
-                      icon: Icons.remove,
-                      onTap: _personCount > 1
-                          ? () => setState(() => _personCount -= 1)
-                          : null,
-                    ),
-                    SizedBox(
-                      width: 40,
-                      child: Text('$_personCount',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w700)),
-                    ),
-                    _CounterButton(
-                      icon: Icons.add,
-                      onTap: () => setState(() => _personCount += 1),
-                    ),
-                  ],
-                ),
-              ),
-            ]),
+                  ),
+                ]),
           ),
         ],
       ),
@@ -603,7 +710,8 @@ class _CounterButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon,
-            color: Colors.white.withValues(alpha: onTap == null ? 0.4 : 1),
+            color: Colors.white
+                .withValues(alpha: onTap == null ? 0.4 : 1),
             size: 18),
       ),
     );
@@ -625,7 +733,8 @@ class _ReviewTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.3)),
+        border: Border.all(
+            color: AppColors.border.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -635,7 +744,8 @@ class _ReviewTile extends StatelessWidget {
               const CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.primary,
-                child: Icon(Icons.person, color: Colors.white, size: 20),
+                child:
+                    Icon(Icons.person, color: Colors.white, size: 20),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -654,7 +764,9 @@ class _ReviewTile extends StatelessWidget {
               Row(
                 children: List.generate(5, (i) {
                   return Icon(
-                    i < review.rating ? Icons.star : Icons.star_border,
+                    i < review.rating
+                        ? Icons.star
+                        : Icons.star_border,
                     color: Colors.amber,
                     size: 16,
                   );
@@ -662,10 +774,12 @@ class _ReviewTile extends StatelessWidget {
               ),
             ],
           ),
-          if (review.comment != null && review.comment!.isNotEmpty) ...[
+          if (review.comment != null &&
+              review.comment!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(review.comment!,
-                style: const TextStyle(color: AppColors.textSecondary)),
+                style: const TextStyle(
+                    color: AppColors.textSecondary)),
           ],
         ],
       ),

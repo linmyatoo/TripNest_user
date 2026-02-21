@@ -11,6 +11,8 @@ class Event {
   final String description;
   final List<String> gallery;
   final int? capacity;
+  final int? availableTickets;
+  final int? bookedTickets;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -25,6 +27,8 @@ class Event {
     required this.description,
     required this.gallery,
     this.capacity,
+    this.availableTickets,
+    this.bookedTickets,
     this.createdAt,
     this.updatedAt,
   });
@@ -50,15 +54,17 @@ class Event {
       location: json['location'] ?? '',
       shortLocation: _extractShortLocation(json['location'] ?? ''),
       date:
-          json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
+        json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
       priceBaht: (json['price'] ?? 0).toInt(),
       imageUrl: resolvedImageUrl,
       gallery: combinedGallery,
       capacity: json['capacity'],
+      availableTickets: json['availableTickets'],
+      bookedTickets: json['bookedTickets'],
       createdAt:
-          json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
+        json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
       updatedAt:
-          json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
+        json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
     );
   }
 

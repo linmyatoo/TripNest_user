@@ -43,16 +43,11 @@ class _HomePageState extends State<HomePage> {
     if (_isLoadingAqi) return;
     setState(() => _isLoadingAqi = true);
     try {
-      // First try to get cached data for instant display
       final cached = await AirQualityService.getCachedAqi();
-      if (cached != null && mounted) {
-        setState(() => _aqiData = cached);
-      }
-      // Then fetch fresh data
+      if (cached != null && mounted) setState(() => _aqiData = cached);
+
       final fresh = await AirQualityService.getAirQuality();
-      if (fresh != null && mounted) {
-        setState(() => _aqiData = fresh);
-      }
+      if (fresh != null && mounted) setState(() => _aqiData = fresh);
     } catch (e) {
       debugPrint('Error loading AQI: $e');
     } finally {
@@ -71,7 +66,6 @@ class _HomePageState extends State<HomePage> {
 
       if (!mounted) return;
       setState(() {
-        // Show unread dot if there are new bookings since last read
         _unreadNotificationCount = bookings.length - lastReadCount;
         if (_unreadNotificationCount < 0) _unreadNotificationCount = 0;
       });
@@ -87,9 +81,7 @@ class _HomePageState extends State<HomePage> {
       await prefs.setInt('last_read_notification_count', bookings.length);
 
       if (!mounted) return;
-      setState(() {
-        _unreadNotificationCount = 0;
-      });
+      setState(() => _unreadNotificationCount = 0);
     } catch (e) {
       debugPrint('Error marking notifications as read: $e');
     }
@@ -97,34 +89,26 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadUserName() async {
     try {
-      // First try to get name from API
       final profileData = await AuthService.getProfileMe();
       debugPrint('Profile data: $profileData');
       if (mounted) {
-        // Try different field names that might contain the user's name
         final name = profileData['fullName'] as String? ??
             profileData['full_name'] as String? ??
             profileData['name'] as String? ??
             profileData['username'] as String? ??
             profileData['displayName'] as String?;
         if (name != null && name.isNotEmpty) {
-          setState(() {
-            _displayName = name;
-          });
+          setState(() => _displayName = name);
           return;
         }
       }
 
-      // Fallback to local storage if API fails
       final userData = await AuthService.getUserData();
       final name = userData['name'] ?? userData['username'];
       if (!mounted || name == null || name.isEmpty) return;
-      setState(() {
-        _displayName = name;
-      });
+      setState(() => _displayName = name);
     } catch (e) {
       debugPrint('Error loading user name: $e');
-      // Ignore errors and keep the fallback name.
     }
   }
 
@@ -135,39 +119,48 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      // First load all events
       final results = await Future.wait([
-        EventService.getEvents(),
         EventService.getUpcomingEvents(),
+        EventService.getEventsByTicketAvailability(),
       ]);
 
-      final allEvents = results[0];
-      final upcomingEvents = results[1];
+      final upcomingEvents = results[0] as List<Event>;
+      final availability = results[1] as List<EventAvailability>;
 
-      // Only load ratings if logged in
+      final now = DateTime.now();
+
+      // ── Popular events logic ───────────────────────────────────────────
+      // 1. Keep only future events (date >= today).
+      // 2. Keep only events where booked percentage > 50%.
+      // 3. Sort by booking percentage descending (most in-demand first).
+      // 4. Take only the top half of that filtered list.
+      final eligible = availability
+          .where((a) =>
+              !a.event.date.isBefore(now) && a.bookedPercentage > 50)
+          .toList()
+        ..sort((a, b) =>
+            b.bookedPercentage.compareTo(a.bookedPercentage));
+
+      final popularEvents = eligible.map((a) => a.event).toList();
+
+      // ── Upcoming events ────────────────────────────────────────────────
+      // Left as-is from the API (sorted ascending by date).
+
+      // Load ratings for upcoming events (shown in EventCard).
+      final Map<String, double> ratings = {};
       final isLoggedIn = await AuthService.isLoggedIn();
-      Map<String, double> ratings = {};
-      List<Event> popularEvents = allEvents;
-      if (isLoggedIn) {
-        final uniqueIds =
-            [...allEvents, ...upcomingEvents].map((e) => e.id).toSet();
+      if (isLoggedIn && upcomingEvents.isNotEmpty) {
         await Future.wait(
-          uniqueIds.map((eventId) async {
+          upcomingEvents.map((event) async {
             try {
-              final rating = await ReviewService.getEventAverageRating(eventId);
-              if (rating != null) {
-                ratings[eventId] = rating;
-              }
+              final rating =
+                  await ReviewService.getEventAverageRating(event.id);
+              if (rating != null) ratings[event.id] = rating;
             } catch (e) {
-              debugPrint('Error loading rating for event $eventId: $e');
+              debugPrint('Error loading rating for ${event.id}: $e');
             }
           }),
         );
-        // Filter popular events: only events with rating > 3
-        popularEvents = allEvents.where((e) {
-          final rating = ratings[e.id];
-          return rating != null && rating > 3;
-        }).toList();
       }
 
       if (!mounted) return;
@@ -189,7 +182,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false, // Prevent back navigation
+      canPop: false,
       child: Scaffold(
         appBar: _topBar(context),
         body: _isLoading
@@ -204,11 +197,13 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 16),
                         const Text('Error loading events',
                             style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold)),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Text(_errorMessage!,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(color: AppColors.muted)),
+                            style:
+                                const TextStyle(color: AppColors.muted)),
                         const SizedBox(height: 16),
                         ElevatedButton.icon(
                           onPressed: _loadEvents,
@@ -221,28 +216,32 @@ class _HomePageState extends State<HomePage> {
                 : RefreshIndicator(
                     onRefresh: _loadEvents,
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      padding:
+                          const EdgeInsets.fromLTRB(16, 8, 16, 24),
                       children: [
-                        // search bar
+                        // Search bar
                         GestureDetector(
-                          onTap: () =>
-                              Navigator.of(context).pushNamed(AppRoutes.search),
+                          onTap: () => Navigator.of(context)
+                              .pushNamed(AppRoutes.search),
                           child: Container(
                             height: 46,
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(24),
-                              border:
-                                  Border.all(color: const Color(0xFFD1D5DB)),
+                              border: Border.all(
+                                  color: const Color(0xFFD1D5DB)),
                             ),
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14),
                             alignment: Alignment.centerLeft,
                             child: const Row(
                               children: [
-                                Icon(Icons.search, color: AppColors.muted),
+                                Icon(Icons.search,
+                                    color: AppColors.muted),
                                 SizedBox(width: 8),
                                 Text('Search your events',
-                                    style: TextStyle(color: AppColors.muted)),
+                                    style: TextStyle(
+                                        color: AppColors.muted)),
                               ],
                             ),
                           ),
@@ -251,16 +250,18 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 18),
                         const Text('Popular Events',
                             style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w800)),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800)),
                         const SizedBox(height: 8),
 
-                        // horizontal cards
+                        // Horizontal popular cards
                         _popularEvents.isEmpty
                             ? const Center(
                                 child: Padding(
                                   padding: EdgeInsets.all(32.0),
-                                  child: Text('No events available',
-                                      style: TextStyle(color: AppColors.muted)),
+                                  child: Text('No popular events yet.',
+                                      style: TextStyle(
+                                          color: AppColors.muted)),
                                 ),
                               )
                             : SizedBox(
@@ -270,32 +271,34 @@ class _HomePageState extends State<HomePage> {
                                   itemCount: _popularEvents.length,
                                   separatorBuilder: (_, __) =>
                                       const SizedBox(width: 14),
-                                  itemBuilder: (context, i) {
-                                    final e = _popularEvents[i];
-                                    return _heroCard(context, e);
-                                  },
+                                  itemBuilder: (context, i) =>
+                                      _heroCard(
+                                          context, _popularEvents[i]),
                                 ),
                               ),
 
                         const SizedBox(height: 16),
                         const Text('Upcoming events',
                             style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.w800)),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800)),
                         const SizedBox(height: 10),
 
-                        // vertical list
+                        // Vertical upcoming list — sorted by date asc
                         if (_upcomingEvents.isEmpty)
                           const Center(
                             child: Padding(
                               padding: EdgeInsets.all(32.0),
                               child: Text('No upcoming events',
-                                  style: TextStyle(color: AppColors.muted)),
+                                  style: TextStyle(
+                                      color: AppColors.muted)),
                             ),
                           )
                         else
                           ..._upcomingEvents.map(
                             (e) => Padding(
-                              padding: const EdgeInsets.only(bottom: 14),
+                              padding:
+                                  const EdgeInsets.only(bottom: 14),
                               child: EventCard(
                                 event: e,
                                 averageRating: _eventRatings[e.id],
@@ -314,25 +317,31 @@ class _HomePageState extends State<HomePage> {
 
   PreferredSizeWidget _topBar(BuildContext context) {
     return AppBar(
-      automaticallyImplyLeading: false, // Remove back button
+      automaticallyImplyLeading: false,
       titleSpacing: 16,
-      title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_displayName,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-      ]),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(_displayName,
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w700)),
+        ],
+      ),
       actions: [
-        // AQI Widget
         if (_aqiData != null)
           GestureDetector(
             onTap: () => _showAqiDetails(context),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 4),
               margin: const EdgeInsets.only(right: 4),
               decoration: BoxDecoration(
-                color: Color(_aqiData!.colorValue).withValues(alpha: 0.15),
+                color: Color(_aqiData!.colorValue)
+                    .withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: Color(_aqiData!.colorValue).withValues(alpha: 0.3),
+                  color: Color(_aqiData!.colorValue)
+                      .withValues(alpha: 0.3),
                 ),
               ),
               child: Column(
@@ -370,11 +379,13 @@ class _HomePageState extends State<HomePage> {
         Stack(
           children: [
             IconButton(
-                icon: const Icon(Icons.notifications_outlined),
-                onPressed: () {
-                  _markNotificationsAsRead();
-                  Navigator.of(context).pushNamed(NotificationFeedPage.route);
-                }),
+              icon: const Icon(Icons.notifications_outlined),
+              onPressed: () {
+                _markNotificationsAsRead();
+                Navigator.of(context)
+                    .pushNamed(NotificationFeedPage.route);
+              },
+            ),
             if (_unreadNotificationCount > 0)
               Positioned(
                 right: 8,
@@ -407,57 +418,57 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _heroCard(BuildContext context, e) {
+  Widget _heroCard(BuildContext context, Event e) {
     return InkWell(
-      onTap: () =>
-          Navigator.pushNamed(context, AppRoutes.eventDetails, arguments: e.id),
+      onTap: () => Navigator.pushNamed(
+          context, AppRoutes.eventDetails,
+          arguments: e.id),
       borderRadius: BorderRadius.circular(18),
       child: Ink(
         width: 280,
         decoration: BoxDecoration(
-            color: Colors.white, borderRadius: BorderRadius.circular(18)),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // lower image height (was AspectRatio 16/9 ≈ 157.5px)
             ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(18)),
+              borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(18)),
               child: SizedBox(
-                height: 132, // <= key: fits the 220 lane
+                height: 132,
                 width: double.infinity,
                 child: Image.network(
                   e.primaryImage,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[300],
-                      child: const Icon(Icons.image_not_supported,
-                          color: Colors.grey, size: 40),
-                    );
-                  },
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.image_not_supported,
+                        color: Colors.grey, size: 40),
+                  ),
+                  loadingBuilder: (_, child, progress) {
+                    if (progress == null) return child;
                     return Container(
                       color: Colors.grey[200],
                       child: const Center(
-                          child: CircularProgressIndicator(strokeWidth: 2)),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2)),
                     );
                   },
                 ),
               ),
             ),
             Padding(
-              padding:
-                  const EdgeInsets.fromLTRB(12, 10, 12, 10), // slightly tighter
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(e.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700)),
                   const SizedBox(height: 4),
                   Row(children: [
                     const Icon(Icons.place_outlined,
@@ -467,7 +478,8 @@ class _HomePageState extends State<HomePage> {
                         child: Text(e.location,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: AppColors.muted))),
+                            style: const TextStyle(
+                                color: AppColors.muted))),
                   ]),
                   const SizedBox(height: 4),
                   Align(
@@ -480,14 +492,15 @@ class _HomePageState extends State<HomePage> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            Color(0xFF60A5FA), // light blue
-                            Color(0xFF3B82F6), // medium blue
+                            Color(0xFF60A5FA),
+                            Color(0xFF3B82F6),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF3B82F6).withOpacity(0.3),
+                            color: const Color(0xFF3B82F6)
+                                .withOpacity(0.3),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -511,7 +524,10 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// Bottom sheet showing detailed AQI information
+// ─────────────────────────────────────────────────────────────────────────────
+// AQI bottom sheet (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _AqiDetailsSheet extends StatelessWidget {
   final AirQualityData aqiData;
 
@@ -528,20 +544,14 @@ class _AqiDetailsSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: aqiColor,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.air,
-                  color: Colors.white,
-                  size: 28,
-                ),
+                    color: aqiColor, shape: BoxShape.circle),
+                child: const Icon(Icons.air,
+                    color: Colors.white, size: 28),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -550,9 +560,10 @@ class _AqiDetailsSheet extends StatelessWidget {
                   children: [
                     Text(
                       'Air Quality Index',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 2),
                     Row(
@@ -560,19 +571,18 @@ class _AqiDetailsSheet extends StatelessWidget {
                         const Icon(Icons.location_on,
                             size: 14, color: AppColors.muted),
                         const SizedBox(width: 4),
-                        Text(
-                          aqiData.cityName,
-                          style: const TextStyle(
-                              color: AppColors.muted, fontSize: 14),
-                        ),
+                        Text(aqiData.cityName,
+                            style: const TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 14)),
                       ],
                     ),
                   ],
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
                   color: aqiColor,
                   borderRadius: BorderRadius.circular(16),
@@ -587,16 +597,14 @@ class _AqiDetailsSheet extends StatelessWidget {
                 child: Text(
                   '${aqiData.aqi}',
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 24,
-                  ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 24),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
-          // Status
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -604,9 +612,7 @@ class _AqiDetailsSheet extends StatelessWidget {
               color: bgColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: aqiColor.withOpacity(0.3),
-                width: 1.5,
-              ),
+                  color: aqiColor.withOpacity(0.3), width: 1.5),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -617,49 +623,47 @@ class _AqiDetailsSheet extends StatelessWidget {
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: aqiColor,
-                        shape: BoxShape.circle,
-                      ),
+                          color: aqiColor, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       aqiData.level,
                       style: TextStyle(
-                        color: aqiColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
+                          color: aqiColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  aqiData.healthRecommendation,
-                  style: const TextStyle(
-                      fontSize: 14, color: AppColors.textSecondary),
-                ),
+                Text(aqiData.healthRecommendation,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSecondary)),
               ],
             ),
           ),
           const SizedBox(height: 20),
-          // Pollutant details
           Row(
             children: [
-              _buildPollutantCard(
-                  'PM2.5', aqiData.pm25.toStringAsFixed(1), 'μg/m³', aqiColor),
+              _buildPollutantCard('PM2.5',
+                  aqiData.pm25.toStringAsFixed(1), 'μg/m³', aqiColor),
+              const SizedBox(width: 12),
+              _buildPollutantCard('PM10',
+                  aqiData.pm10.toStringAsFixed(1), 'μg/m³', aqiColor),
               const SizedBox(width: 12),
               _buildPollutantCard(
-                  'PM10', aqiData.pm10.toStringAsFixed(1), 'μg/m³', aqiColor),
-              const SizedBox(width: 12),
-              _buildPollutantCard('Temp',
-                  '${aqiData.temperature.toStringAsFixed(0)}°C', '', aqiColor),
+                  'Temp',
+                  '${aqiData.temperature.toStringAsFixed(0)}°C',
+                  '',
+                  aqiColor),
             ],
           ),
           const SizedBox(height: 16),
-          // Last updated
           Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(20),
@@ -672,8 +676,8 @@ class _AqiDetailsSheet extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                     'Updated: ${_formatTime(aqiData.updatedAt)}',
-                    style:
-                        const TextStyle(color: AppColors.muted, fontSize: 12),
+                    style: const TextStyle(
+                        color: AppColors.muted, fontSize: 12),
                   ),
                 ],
               ),
@@ -697,31 +701,21 @@ class _AqiDetailsSheet extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: accentColor,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Text(label,
+                style: TextStyle(
+                    color: accentColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
-            Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            if (unit.isNotEmpty)
-              Text(
-                unit,
+            Text(value,
                 style: const TextStyle(
-                  color: AppColors.muted,
-                  fontSize: 11,
-                ),
-              ),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: AppColors.textPrimary)),
+            if (unit.isNotEmpty)
+              Text(unit,
+                  style: const TextStyle(
+                      color: AppColors.muted, fontSize: 11)),
           ],
         ),
       ),
@@ -733,11 +727,9 @@ class _AqiDetailsSheet extends StatelessWidget {
     final now = DateTime.now();
     final diff = now.difference(local);
 
-    if (diff.inMinutes < 60) {
-      return '${diff.inMinutes}m ago';
-    } else if (diff.inHours < 24) {
-      return '${diff.inHours}h ago';
-    }
-    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
   }
 }
