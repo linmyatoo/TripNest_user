@@ -1,8 +1,11 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 
 import '../../models/event.dart';
+import '../utils/app_log.dart';
+import 'session.dart';
+import 'http_client.dart';
+import '../config/api_endpoints.dart';
 
 /// Pairs an [Event] with its live ticket availability data so callers can
 /// compute booking percentages without making a second network call.
@@ -31,31 +34,32 @@ class EventAvailability {
 }
 
 class EventService {
-  static const String baseUrl = 'https://naylinhtet.me/api';
+  static const String baseUrl = ApiEndpoints.baseUrl;
 
   /// Fetch all events
   static Future<List<Event>> getEvents() async {
     try {
       final url = Uri.parse('$baseUrl/events');
 
-      print('Fetching events from: $url');
+      AppLog.d('Fetching events from: $url');
 
-      final response = await http.get(
+      final response = await Http.client.get(
         url,
         headers: {'Content-Type': 'application/json'},
       );
 
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+      AppLog.d('Response status: ${response.statusCode}');
+      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Event.fromJson(json)).toList();
+        return Event.listFromJson(data);
       } else {
         throw Exception('Failed to load events');
       }
     } catch (e) {
-      print('Error fetching events: $e');
+      AppLog.e('Failed to fetch events', e);
+      if (e.toString().contains('Exception:')) rethrow;
       throw Exception('Network error: ${e.toString()}');
     }
   }
@@ -65,24 +69,25 @@ class EventService {
     try {
       final url = Uri.parse('$baseUrl/events/upcoming');
 
-      print('Fetching upcoming events from: $url');
+      AppLog.d('Fetching upcoming events from: $url');
 
-      final response = await http.get(
+      final response = await Http.client.get(
         url,
         headers: {'Content-Type': 'application/json'},
       );
 
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+      AppLog.d('Response status: ${response.statusCode}');
+      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Event.fromJson(json)).toList();
+        return Event.listFromJson(data);
       } else {
         throw Exception('Failed to load upcoming events');
       }
     } catch (e) {
-      print('Error fetching upcoming events: $e');
+      AppLog.e('Failed to fetch upcoming events', e);
+      if (e.toString().contains('Exception:')) rethrow;
       throw Exception('Network error: ${e.toString()}');
     }
   }
@@ -98,15 +103,15 @@ class EventService {
     try {
       final url = Uri.parse('$baseUrl/events/tickets/availability');
 
-      print('Fetching ticket availability from: $url');
+      AppLog.d('Fetching ticket availability from: $url');
 
-      final response = await http.get(
+      final response = await Http.client.get(
         url,
         headers: {'Content-Type': 'application/json'},
       );
 
-      print('Ticket availability status: ${response.statusCode}');
-      print('Ticket availability body: ${response.body}');
+      AppLog.d('Ticket availability status: ${response.statusCode}');
+      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> body = jsonDecode(response.body);
@@ -116,38 +121,16 @@ class EventService {
         final fullyBookedRaw =
             (body['fullyBookedEvents'] as List<dynamic>?) ?? [];
 
-        EventAvailability _fromSorted(dynamic raw) {
-          final map = raw as Map<String, dynamic>;
-          final capacity = (map['capacity'] as num?)?.toInt() ?? 0;
-          final booked = (map['bookedTickets'] as num?)?.toInt() ?? 0;
-          return EventAvailability(
-            event: Event.fromJson(map),
-            bookedTickets: booked,
-            capacity: capacity,
-            isFullyBooked: false,
-          );
-        }
-
-        EventAvailability _fromFullyBooked(dynamic raw) {
-          final map = raw as Map<String, dynamic>;
-          final capacity = (map['capacity'] as num?)?.toInt() ?? 0;
-          return EventAvailability(
-            event: Event.fromJson(map),
-            bookedTickets: capacity, // fully booked → booked == capacity
-            capacity: capacity,
-            isFullyBooked: true,
-          );
-        }
-
         return [
-          ...sortedRaw.map(_fromSorted),
-          ...fullyBookedRaw.map(_fromFullyBooked),
+          ..._parseAvailability(sortedRaw, fullyBooked: false),
+          ..._parseAvailability(fullyBookedRaw, fullyBooked: true),
         ];
       } else {
         throw Exception('Failed to load ticket availability');
       }
     } catch (e) {
-      print('Error fetching ticket availability: $e');
+      AppLog.e('Failed to fetch ticket availability', e);
+      if (e.toString().contains('Exception:')) rethrow;
       throw Exception('Network error: ${e.toString()}');
     }
   }
@@ -157,24 +140,27 @@ class EventService {
     try {
       final url = Uri.parse('$baseUrl/events/$id');
 
-      print('Fetching event from: $url');
+      AppLog.d('Fetching event from: $url');
 
-      final response = await http.get(
+      final response = await Http.client.get(
         url,
         headers: {'Content-Type': 'application/json'},
       );
 
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+      AppLog.d('Response status: ${response.statusCode}');
+      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return Event.fromJson(data);
+      } else if (response.statusCode == 404) {
+        throw Exception('Event not found');
       } else {
         throw Exception('Failed to load event');
       }
     } catch (e) {
-      print('Error fetching event: $e');
+      AppLog.e('Failed to fetch event', e);
+      if (e.toString().contains('Exception:')) rethrow;
       throw Exception('Network error: ${e.toString()}');
     }
   }
@@ -200,25 +186,57 @@ class EventService {
       final url = Uri.parse('$baseUrl/events/search')
           .replace(queryParameters: queryParams);
 
-      print('Searching events from: $url');
+      AppLog.d('Searching events from: $url');
 
-      final response = await http.get(
+      final response = await Http.client.get(
         url,
         headers: {'Content-Type': 'application/json'},
       );
 
-      print('Search response status: ${response.statusCode}');
-      print('Search response body: ${response.body}');
+      AppLog.d('Search response status: ${response.statusCode}');
+      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Event.fromJson(json)).toList();
+        return Event.listFromJson(data);
       } else {
         throw Exception('Failed to search events');
       }
     } catch (e) {
-      print('Error searching events: $e');
+      AppLog.e('Failed to search events', e);
+      if (e.toString().contains('Exception:')) rethrow;
       throw Exception('Network error: ${e.toString()}');
     }
+  }
+
+  /// Builds availability rows, skipping any record the server sent malformed.
+  static List<EventAvailability> _parseAvailability(
+    List<dynamic> raw, {
+    required bool fullyBooked,
+  }) {
+    final rows = <EventAvailability>[];
+    for (final item in raw) {
+      if (item is! Map<String, dynamic>) continue;
+      try {
+        final capacity = _asInt(item['capacity']);
+        rows.add(EventAvailability(
+          event: Event.fromJson(item),
+          // A fully booked event has booked == capacity by definition.
+          bookedTickets:
+              fullyBooked ? capacity : _asInt(item['bookedTickets']),
+          capacity: capacity,
+          isFullyBooked: fullyBooked,
+        ));
+      } catch (e) {
+        AppLog.e('Skipping malformed availability record', e);
+      }
+    }
+    return rows;
+  }
+
+  static int _asInt(Object? value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim()) ?? 0;
+    return 0;
   }
 }

@@ -76,11 +76,11 @@ class AppRouter {
         return _adaptive(const HelpCenterPage(), settings: settings);
 
       case AppRoutes.appShell:
-        // If your AppShell has no initialIndex param, keep this:
-        return _adaptive(const AppShell(), settings: settings);
-      // If you added it, use:
-      // final initialIndex = (settings.arguments as int?) ?? 0;
-      // return _adaptive(AppShell(initialIndex: initialIndex), settings: settings);
+        // Callers pass the tab to open as an int argument; this used to be
+        // commented out, so `arguments: 0` (and every other index) was ignored.
+        final initialIndex = (settings.arguments as int?) ?? 0;
+        return _adaptive(AppShell(initialIndex: initialIndex),
+            settings: settings);
 
       case AppRoutes.eventDetails:
         return _adaptive(EventDetailPage(eventId: settings.arguments as String),

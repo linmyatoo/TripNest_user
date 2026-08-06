@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import '../../core/config/api_config.dart';
+import '../../core/services/http_client.dart';
 
 class ChatMessage {
   final String text;
@@ -16,7 +16,7 @@ class ChatMessage {
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 
-  Map<String, String> toGroqMessage() {
+  Map<String, String> toApiMessage() {
     return {
       'role': isUser ? 'user' : 'assistant',
       'content': text,
@@ -32,8 +32,8 @@ class ChatbotPage extends StatefulWidget {
 }
 
 class _ChatbotPageState extends State<ChatbotPage> {
-  static const String _groqApiUrl =
-      'https://api.groq.com/openai/v1/chat/completions';
+  /// How many past turns to replay to the model on each request.
+  static const int _maxHistoryMessages = 20;
 
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
@@ -94,7 +94,7 @@ Always be helpful and provide actionable advice when possible.''';
     _scrollToBottom();
 
     try {
-      final response = await _callGroqApi(text);
+      final response = await _callChatApi();
       if (!mounted) return;
       setState(() {
         _isTyping = false;
@@ -113,21 +113,31 @@ Always be helpful and provide actionable advice when possible.''';
     _scrollToBottom();
   }
 
-  Future<String> _callGroqApi(String userMessage) async {
+  Future<String> _callChatApi() async {
+    if (ApiConfig.isChatKeyMissing) {
+      throw Exception('Missing API key for ${ApiConfig.chatProvider.name}');
+    }
+
+    // _messages already ends with this turn (added by _sendMessage), so it must
+    // not be appended again. Only the tail is sent so a long session can't grow
+    // past the model's context window.
+    final history = _messages.length > _maxHistoryMessages
+        ? _messages.sublist(_messages.length - _maxHistoryMessages)
+        : _messages;
+
     final messages = [
       {'role': 'system', 'content': _systemPrompt},
-      ..._messages.map((m) => m.toGroqMessage()),
-      {'role': 'user', 'content': userMessage},
+      ...history.map((m) => m.toApiMessage()),
     ];
 
-    final response = await http.post(
-      Uri.parse(_groqApiUrl),
+    final response = await Http.client.post(
+      ApiConfig.chatCompletionsUrl,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${ApiConfig.groqApiKey}',
+        'Authorization': 'Bearer ${ApiConfig.chatApiKey}',
       },
       body: jsonEncode({
-        'model': 'llama-3.3-70b-versatile',
+        'model': ApiConfig.chatModel,
         'messages': messages,
         'temperature': 0.7,
         'max_tokens': 1024,

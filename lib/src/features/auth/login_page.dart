@@ -4,6 +4,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/services/security_service.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/primary_button.dart';
+import '../../core/theme/app_colors.dart';
 
 class LoginPage extends StatefulWidget {
   static const route = '/login';
@@ -251,7 +252,7 @@ class _LoginPageState extends State<LoginPage> {
                   },
                   child: const Text('Forgot Password?',
                       style: TextStyle(
-                          color: Color(0xFF2563EB),
+                          color: AppColors.primary,
                           fontWeight: FontWeight.w600)),
                 ),
               ),
@@ -301,7 +302,7 @@ class _LoginPageState extends State<LoginPage> {
                       Navigator.pushReplacementNamed(context, '/signup'),
                   child: const Text('Sign Up',
                       style: TextStyle(
-                          color: Color(0xFF2563EB),
+                          color: AppColors.primary,
                           fontWeight: FontWeight.w600)),
                 ),
               ]),

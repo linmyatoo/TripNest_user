@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
 
 import '../../../main.dart';
+import 'notification_settings_service.dart';
 
 /// Service for showing local notifications with sound and vibration
 class LocalNotificationService {
@@ -12,6 +13,21 @@ class LocalNotificationService {
       FlutterLocalNotificationsPlugin();
 
   static bool _initialized = false;
+
+  /// Monotonic notification id.
+  ///
+  /// The old `millisecondsSinceEpoch ~/ 1000` collided for anything posted
+  /// within the same second, and the plugin *replaces* a notification whose id
+  /// already exists — so a chat notification could silently eat a booking
+  /// confirmation.
+  static int _nextId =
+      DateTime.now().millisecondsSinceEpoch.remainder(1 << 30);
+
+  static int _newId() {
+    // Android notification ids must fit in a 32-bit int.
+    _nextId = (_nextId + 1) % (1 << 30);
+    return _nextId;
+  }
 
   /// Initialize the notification service
   static Future<void> initialize() async {
@@ -43,6 +59,45 @@ class LocalNotificationService {
 
     _initialized = true;
     debugPrint('LocalNotificationService initialized');
+  }
+
+  /// True when the user has notifications switched on at all.
+  static Future<bool> _notificationsAllowed() =>
+      NotificationSettingsService.isNotificationsEnabled();
+
+  /// Builds platform details that respect the user's sound preference. These
+  /// can't be `const` any more precisely because they depend on settings.
+  static Future<NotificationDetails> _details({
+    required String channelId,
+    required String channelName,
+    required String channelDescription,
+    AndroidNotificationCategory? androidCategory,
+    bool timeSensitive = false,
+  }) async {
+    final sound = await NotificationSettingsService.shouldPlaySound();
+    final vibrate = await NotificationSettingsService.shouldVibrate();
+
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        channelName,
+        channelDescription: channelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: sound,
+        enableVibration: vibrate,
+        icon: '@mipmap/ic_launcher',
+        category: androidCategory,
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: sound,
+        interruptionLevel: timeSensitive
+            ? InterruptionLevel.timeSensitive
+            : InterruptionLevel.active,
+      ),
+    );
   }
 
   /// Handle notification tap based on payload
@@ -111,40 +166,22 @@ class LocalNotificationService {
     required int ticketCount,
     required double totalPrice,
   }) async {
+    if (!await _notificationsAllowed()) return;
     if (!_initialized) {
       await initialize();
     }
 
-    // Vibrate the device
     await _vibrate();
 
-    // Notification details with sound
-    const androidDetails = AndroidNotificationDetails(
-      'booking_channel',
-      'Booking Notifications',
+    final notificationDetails = await _details(
+      channelId: 'booking_channel',
+      channelName: 'Booking Notifications',
       channelDescription: 'Notifications for booking confirmations',
-      importance: Importance.high,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-      icon: '@mipmap/ic_launcher',
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      // Show banner even when app is in foreground
-      interruptionLevel: InterruptionLevel.timeSensitive,
-    );
-
-    const notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
+      timeSensitive: true,
     );
 
     await _notifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      _newId(),
       'Booking Confirmed!',
       'Your booking for "$eventTitle" ($ticketCount tickets, ฿${totalPrice.toStringAsFixed(2)}) has been confirmed!',
       notificationDetails,
@@ -159,6 +196,7 @@ class LocalNotificationService {
     required String body,
     bool vibrate = true,
   }) async {
+    if (!await _notificationsAllowed()) return;
     if (!_initialized) {
       await initialize();
     }
@@ -167,28 +205,14 @@ class LocalNotificationService {
       await _vibrate();
     }
 
-    const androidDetails = AndroidNotificationDetails(
-      'general_channel',
-      'General Notifications',
+    final notificationDetails = await _details(
+      channelId: 'general_channel',
+      channelName: 'General Notifications',
       channelDescription: 'General app notifications',
-      importance: Importance.high,
-      priority: Priority.high,
-      playSound: true,
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    const notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
     );
 
     await _notifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      _newId(),
       title,
       body,
       notificationDetails,
@@ -202,34 +226,19 @@ class LocalNotificationService {
     required String roomId,
     required String roomName,
   }) async {
+    if (!await _notificationsAllowed()) return;
     if (!_initialized) {
       await initialize();
     }
 
     await _vibrate(duration: 300);
 
-    const androidDetails = AndroidNotificationDetails(
-      'message_channel',
-      'Message Notifications',
+    final notificationDetails = await _details(
+      channelId: 'message_channel',
+      channelName: 'Message Notifications',
       channelDescription: 'Notifications for new messages',
-      importance: Importance.high,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-      icon: '@mipmap/ic_launcher',
-      category: AndroidNotificationCategory.message,
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      interruptionLevel: InterruptionLevel.timeSensitive,
-    );
-
-    const notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
+      androidCategory: AndroidNotificationCategory.message,
+      timeSensitive: true,
     );
 
     // Create payload with chat room info for navigation
@@ -240,7 +249,7 @@ class LocalNotificationService {
     });
 
     await _notifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      _newId(),
       senderName,
       message,
       notificationDetails,
@@ -256,33 +265,18 @@ class LocalNotificationService {
     required String body,
     required int aqiValue,
   }) async {
+    if (!await _notificationsAllowed()) return;
     if (!_initialized) {
       await initialize();
     }
 
     await _vibrate(duration: 300);
 
-    const androidDetails = AndroidNotificationDetails(
-      'aqi_channel',
-      'Air Quality Notifications',
+    final notificationDetails = await _details(
+      channelId: 'aqi_channel',
+      channelName: 'Air Quality Notifications',
       channelDescription: 'Notifications for air quality updates',
-      importance: Importance.high,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-      icon: '@mipmap/ic_launcher',
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      interruptionLevel: InterruptionLevel.timeSensitive,
-    );
-
-    const notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
+      timeSensitive: true,
     );
 
     // Create payload for navigation
@@ -292,7 +286,7 @@ class LocalNotificationService {
     });
 
     await _notifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      _newId(),
       title,
       body,
       notificationDetails,
@@ -302,8 +296,10 @@ class LocalNotificationService {
     debugPrint('AQI notification shown: AQI $aqiValue');
   }
 
-  /// Vibrate the device
+  /// Vibrate the device, unless the user turned vibration (or notifications)
+  /// off in settings.
   static Future<void> _vibrate({int duration = 500}) async {
+    if (!await NotificationSettingsService.shouldVibrate()) return;
     try {
       final hasVibrator = await Vibration.hasVibrator();
       if (hasVibrator == true) {

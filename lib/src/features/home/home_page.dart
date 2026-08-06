@@ -10,6 +10,7 @@ import '../../core/services/review_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/event.dart';
 import '../../widgets/event_card.dart';
+import '../../core/utils/app_log.dart';
 import '../notifications/notification_feed_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -55,6 +56,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Key holding the ids of bookings the user has already seen.
+  ///
+  /// The badge used to be `bookings.length - lastReadCount`. One cancellation
+  /// made the total shrink below the stored count, so the delta was pinned at
+  /// 0 and the badge never appeared again. Tracking ids is cancellation-proof.
+  static const String _readBookingIdsKey = 'read_booking_ids';
+
   Future<void> _loadUnreadCount() async {
     try {
       final isLoggedIn = await AuthService.isLoggedIn();
@@ -62,15 +70,16 @@ class _HomePageState extends State<HomePage> {
 
       final bookings = await BookingService.getMyBookings();
       final prefs = await SharedPreferences.getInstance();
-      final lastReadCount = prefs.getInt('last_read_notification_count') ?? 0;
+      final readIds =
+          (prefs.getStringList(_readBookingIdsKey) ?? const <String>[]).toSet();
+
+      final unread =
+          bookings.where((booking) => !readIds.contains(booking.id)).length;
 
       if (!mounted) return;
-      setState(() {
-        _unreadNotificationCount = bookings.length - lastReadCount;
-        if (_unreadNotificationCount < 0) _unreadNotificationCount = 0;
-      });
+      setState(() => _unreadNotificationCount = unread);
     } catch (e) {
-      debugPrint('Error loading unread count: $e');
+      AppLog.e('Failed to load unread count', e);
     }
   }
 
@@ -78,19 +87,21 @@ class _HomePageState extends State<HomePage> {
     try {
       final bookings = await BookingService.getMyBookings();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('last_read_notification_count', bookings.length);
+      await prefs.setStringList(
+        _readBookingIdsKey,
+        bookings.map((booking) => booking.id).toList(),
+      );
 
       if (!mounted) return;
       setState(() => _unreadNotificationCount = 0);
     } catch (e) {
-      debugPrint('Error marking notifications as read: $e');
+      AppLog.e('Failed to mark notifications as read', e);
     }
   }
 
   Future<void> _loadUserName() async {
     try {
       final profileData = await AuthService.getProfileMe();
-      debugPrint('Profile data: $profileData');
       if (mounted) {
         final name = profileData['fullName'] as String? ??
             profileData['full_name'] as String? ??
@@ -181,9 +192,9 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
+    // Android back handling lives in AppShell: this page stays alive inside the
+    // shell's IndexedStack, so a PopScope here blocked back on every tab.
+    return Scaffold(
         appBar: _topBar(context),
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
@@ -311,7 +322,6 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-      ),
     );
   }
 
@@ -356,7 +366,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   Text(
-                    '${_aqiData!.aqi}',
+                    _aqiData!.aqiDisplay,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -493,14 +503,14 @@ class _HomePageState extends State<HomePage> {
                           end: Alignment.bottomRight,
                           colors: [
                             Color(0xFF60A5FA),
-                            Color(0xFF3B82F6),
+                            AppColors.primaryLight,
                           ],
                         ),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF3B82F6)
-                                .withOpacity(0.3),
+                            color: AppColors.primaryLight
+                                .withValues(alpha: 0.3),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -588,14 +598,14 @@ class _AqiDetailsSheet extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: aqiColor.withOpacity(0.3),
+                      color: aqiColor.withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
                   ],
                 ),
                 child: Text(
-                  '${aqiData.aqi}',
+                  aqiData.aqiDisplay,
                   style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -612,7 +622,7 @@ class _AqiDetailsSheet extends StatelessWidget {
               color: bgColor,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: aqiColor.withOpacity(0.3), width: 1.5),
+                  color: aqiColor.withValues(alpha: 0.3), width: 1.5),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -646,15 +656,23 @@ class _AqiDetailsSheet extends StatelessWidget {
           const SizedBox(height: 20),
           Row(
             children: [
-              _buildPollutantCard('PM2.5',
-                  aqiData.pm25.toStringAsFixed(1), 'μg/m³', aqiColor),
+              _buildPollutantCard(
+                  'PM2.5',
+                  AirQualityData.formatReading(aqiData.pm25),
+                  'μg/m³',
+                  aqiColor),
               const SizedBox(width: 12),
-              _buildPollutantCard('PM10',
-                  aqiData.pm10.toStringAsFixed(1), 'μg/m³', aqiColor),
+              _buildPollutantCard(
+                  'PM10',
+                  AirQualityData.formatReading(aqiData.pm10),
+                  'μg/m³',
+                  aqiColor),
               const SizedBox(width: 12),
               _buildPollutantCard(
                   'Temp',
-                  '${aqiData.temperature.toStringAsFixed(0)}°C',
+                  aqiData.temperature == null
+                      ? '--'
+                      : '${AirQualityData.formatReading(aqiData.temperature, decimals: 0)}°C',
                   '',
                   aqiColor),
             ],

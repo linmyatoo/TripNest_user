@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/primary_button.dart';
+import '../../core/theme/app_colors.dart';
 
 class SignUpPage extends StatefulWidget {
   static const route = '/signup';
@@ -60,7 +61,7 @@ class _SignUpPageState extends State<SignUpPage> {
     try {
       await AuthService.register(
         username: _nameController.text.trim(),
-        phone_number: _phoneController.text.trim(),
+        phoneNumber: _phoneController.text.trim(),
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
         role: 'user',
@@ -130,18 +131,15 @@ class _SignUpPageState extends State<SignUpPage> {
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
-                prefix: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                prefix: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    // Image.asset('assets/images/flag_th.png',
-                    //     width: 22, height: 22),
-                    const SizedBox(width: 8),
-                    const Text('+66',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(width: 8),
-                    const VerticalDivider(width: 1.0, thickness: 1.0),
-                    const SizedBox(width: 4),
-                  ],),
+                    SizedBox(width: 8),
+                    Text('+66', style: TextStyle(fontWeight: FontWeight.w600)),
+                    SizedBox(width: 8),
+                    VerticalDivider(width: 1.0, thickness: 1.0),
+                    SizedBox(width: 4),
+                  ]),
                 ),
               ),
               const SizedBox(height: 16),
@@ -240,7 +238,7 @@ class _Blue extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(text,
         style: const TextStyle(
-            color: Color(0xFF2563EB), fontWeight: FontWeight.w600));
+            color: AppColors.primary, fontWeight: FontWeight.w600));
   }
 }
 
@@ -282,7 +280,7 @@ class _SignUpSuccessDialog extends StatelessWidget {
                 width: 64,
                 height: 64,
                 decoration: const BoxDecoration(
-                  color: Color(0xFF2563EB), // AppColors.primary
+                  color: AppColors.primary, // AppColors.primary
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.check, color: Colors.white, size: 36),
@@ -308,7 +306,7 @@ class _SignUpSuccessDialog extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(

@@ -3,6 +3,8 @@ import 'package:tripnest/src/app_router.dart';
 import 'package:tripnest/src/core/services/booking_service.dart';
 import 'package:tripnest/src/core/services/event_service.dart';
 import 'package:tripnest/src/core/theme/app_colors.dart';
+import 'package:tripnest/src/core/utils/app_log.dart';
+import 'package:tripnest/src/core/utils/date_format.dart';
 import 'package:tripnest/src/models/booking.dart';
 import 'package:tripnest/src/models/event.dart';
 
@@ -35,9 +37,18 @@ class _MyBookingPageState extends State<MyBookingPage> {
       appBar: AppBar(
         title: const Text('My Booking'),
         leading: BackButton(
-          onPressed: () => Navigator.pushNamedAndRemoveUntil(
-              context, AppRoutes.appShell, (_) => false,
-              arguments: 0),
+          // Prefer a plain pop: rebuilding the whole shell threw away the
+          // navigation stack on every back press.
+          onPressed: () {
+            final navigator = Navigator.of(context);
+            if (navigator.canPop()) {
+              navigator.pop();
+            } else {
+              navigator.pushNamedAndRemoveUntil(
+                  AppRoutes.appShell, (_) => false,
+                  arguments: 0);
+            }
+          },
         ),
       ),
       body: ListView(
@@ -185,13 +196,20 @@ class _MyBookingPageState extends State<MyBookingPage> {
       final upcoming = <_BookingEntry>[];
       final completed = <_CompletedEntry>[];
 
-      for (final booking in bookings) {
-        Event? event;
+      // One request per booking, run in parallel: serialised, a 10-booking
+      // list took ten round trips end to end.
+      final events = await Future.wait(bookings.map((booking) async {
         try {
-          event = await EventService.getEventById(booking.eventId);
+          return await EventService.getEventById(booking.eventId);
         } catch (e) {
-          debugPrint('Failed to load event ${booking.eventId}: $e');
+          AppLog.e('Failed to load event ${booking.eventId}', e);
+          return null;
         }
+      }));
+
+      for (var i = 0; i < bookings.length; i++) {
+        final booking = bookings[i];
+        final Event? event = events[i];
 
         // Determine bucket using the event date (client-side, real-time).
         // If the event detail couldn't be loaded, fall back to the server flag.
@@ -324,16 +342,12 @@ class _UpcomingBookingTile extends StatelessWidget {
   final VoidCallback? onDetailsTap;
 
   static const double _minTileHeight = 118;
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
 
   @override
   Widget build(BuildContext context) {
     final DateTime date = event?.date ?? booking.createdAt;
     final day = date.day.toString().padLeft(2, '0');
-    final mon = _months[date.month - 1];
+    final mon = AppDate.monthShort(date.month);
     final fallbackTitle = booking.id.isNotEmpty
         ? 'Booking ${booking.id.substring(0, booking.id.length >= 6 ? 6 : booking.id.length)}'
         : 'Booking';
@@ -488,10 +502,7 @@ class _CompletedBookingTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = event.date;
     final day = d.day.toString().padLeft(2, '0');
-    final mon = const [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ][d.month - 1];
+    final mon = AppDate.monthShort(d.month);
 
     return InkWell(
       onTap: onTap,

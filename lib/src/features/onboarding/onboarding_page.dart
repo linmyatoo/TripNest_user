@@ -13,6 +13,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
   final controller = PageController();
   int page = 0;
 
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
   final slides = const [
     _Slide(
       bg: 'assets/images/onboarding_1.jpg',

@@ -23,6 +23,17 @@ class _EventDetailPageState extends State<EventDetailPage> {
   bool _isLoading = true;
   String? _errorMessage;
   int _personCount = 1;
+
+  /// True once the availability API reports zero remaining tickets.
+  bool get _isFullyBooked => _availableTickets == 0;
+
+  /// Upper bound for the person stepper. Falls back to a sane cap when the
+  /// availability endpoint hasn't answered yet.
+  int get _maxPersonCount {
+    final available = _availableTickets;
+    if (available == null) return 10;
+    return available < 1 ? 1 : available;
+  }
   bool _isFavorite = false;
   final PageController _photoController = PageController();
   int _currentPhotoIndex = 0;
@@ -56,6 +67,11 @@ class _EventDetailPageState extends State<EventDetailPage> {
               ? 0
               : entry.capacity - entry.bookedTickets;
           _capacity = entry.capacity;
+          // Availability can arrive (or shrink) after the user has already
+          // bumped the stepper, so re-clamp it here.
+          if (_personCount > _maxPersonCount) {
+            _personCount = _maxPersonCount;
+          }
         });
       }
     } catch (e) {
@@ -134,28 +150,29 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
   Future<void> _checkFavoriteStatus() async {
     final isFav = await FavoriteService.isFavorite(widget.eventId);
-    if (mounted) setState(() => _isFavorite = isFav);
+    if (mounted) {
+      setState(() => _isFavorite = isFav);
+    }
   }
 
   Future<void> _loadReviews() async {
     final reviews = await ReviewService.getEventReviews(widget.eventId);
-    if (mounted) setState(() => _reviews = reviews);
+    if (mounted) {
+      setState(() => _reviews = reviews);
+    }
   }
 
   Future<void> _loadAverageRating() async {
     final rating =
         await ReviewService.getEventAverageRating(widget.eventId);
-    if (mounted) setState(() => _averageRating = rating);
+    if (mounted) {
+      setState(() => _averageRating = rating);
+    }
   }
 
   Future<void> _toggleFavorite() async {
-    print('Toggling favorite for event ID: ${widget.eventId}');
     final newStatus =
         await FavoriteService.toggleFavorite(widget.eventId);
-    print('New favorite status: $newStatus');
-
-    final savedIds = await FavoriteService.getFavoriteIds();
-    print('Current saved favorite IDs: $savedIds');
 
     if (mounted) {
       setState(() => _isFavorite = newStatus);
@@ -177,9 +194,10 @@ class _EventDetailPageState extends State<EventDetailPage> {
     );
     int currentIndex = controller.initialPage;
 
-    await showDialog(
+    try {
+      await showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.9),
+      barrierColor: Colors.black.withValues(alpha: 0.9),
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
@@ -246,7 +264,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                             decoration: BoxDecoration(
                               color: isActive
                                   ? Colors.white
-                                  : Colors.white.withOpacity(0.4),
+                                  : Colors.white.withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           );
@@ -259,7 +277,12 @@ class _EventDetailPageState extends State<EventDetailPage> {
           },
         );
       },
-    );
+      );
+    } finally {
+      // Every gallery tap creates a controller; without this each one leaks
+      // for the lifetime of the page.
+      controller.dispose();
+    }
   }
 
   Widget _buildReviewsSection() {
@@ -377,6 +400,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
 
     try {
       final event = await EventService.getEventById(widget.eventId);
+      if (!mounted) return;
       setState(() {
         _event = event;
         _isLoading = false;
@@ -384,8 +408,9 @@ class _EventDetailPageState extends State<EventDetailPage> {
       });
       _restartAutoSlide();
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
         _isLoading = false;
       });
     }
@@ -522,15 +547,19 @@ class _EventDetailPageState extends State<EventDetailPage> {
             const SizedBox(width: 12),
             Expanded(
                 child: PrimaryButton(
-              label: 'Book Now',
-              onPressed: () => Navigator.pushNamed(
-                context,
-                AppRoutes.payment,
-                arguments: {
-                  'event': event,
-                  'personCount': _personCount
-                },
-              ),
+              label: _isFullyBooked ? 'Fully Booked' : 'Book Now',
+              // Disabled when sold out: tapping through only produced a
+              // "Payment Failed" screen after the server rejected it.
+              onPressed: _isFullyBooked
+                  ? null
+                  : () => Navigator.pushNamed(
+                        context,
+                        AppRoutes.payment,
+                        arguments: {
+                          'event': event,
+                          'personCount': _personCount,
+                        },
+                      ),
             )),
           ],
         ),
@@ -567,7 +596,7 @@ class _EventDetailPageState extends State<EventDetailPage> {
                       style: TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 8),
-                  Text(event.description * 2),
+                  Text(event.description),
                   const SizedBox(height: 16),
                   const Text('Reviews',
                       style: TextStyle(
@@ -611,8 +640,9 @@ class _EventDetailPageState extends State<EventDetailPage> {
                               },
                               loadingBuilder:
                                   (context, child, loadingProgress) {
-                                if (loadingProgress == null)
+                                if (loadingProgress == null) {
                                   return child;
+                                }
                                 return Container(
                                   width: 100,
                                   height: 72,
@@ -678,8 +708,11 @@ class _EventDetailPageState extends State<EventDetailPage> {
                         ),
                         _CounterButton(
                           icon: Icons.add,
-                          onTap: () =>
-                              setState(() => _personCount += 1),
+                          // Capped at remaining availability: the count used
+                          // to grow without bound and only fail at payment.
+                          onTap: _personCount < _maxPersonCount
+                              ? () => setState(() => _personCount += 1)
+                              : null,
                         ),
                       ],
                     ),

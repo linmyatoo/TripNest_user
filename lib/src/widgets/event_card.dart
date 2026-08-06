@@ -117,13 +117,13 @@ class EventCard extends StatelessWidget {
                             end: Alignment.bottomRight,
                             colors: [
                               Color(0xFF60A5FA), // light blue
-                              Color(0xFF3B82F6), // medium blue
+                              AppColors.primaryLight, // medium blue
                             ],
                           ),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF3B82F6).withOpacity(0.3),
+                              color: AppColors.primaryLight.withValues(alpha: 0.3),
                               blurRadius: 6,
                               offset: const Offset(0, 2),
                             ),

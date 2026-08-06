@@ -1,6 +1,11 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-class NotificationService {
+/// User-facing notification preferences (the toggles on the settings page).
+///
+/// Named distinctly from [NotificationService] in notification_service.dart,
+/// which owns the notification *feed*. Two classes with the same name only
+/// compiled because no file imported both.
+class NotificationSettingsService {
   // Storage keys
   static const String _notificationsEnabledKey = 'notifications_enabled';
   static const String _soundEnabledKey = 'notification_sound_enabled';

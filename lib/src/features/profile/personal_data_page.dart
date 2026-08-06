@@ -11,6 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/security_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_log.dart';
+import '../../core/utils/date_format.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/primary_button.dart';
 
@@ -37,12 +39,20 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
 
   bool _isLoading = true;
   bool _isSaving = false;
-  String? _userId; // Store user ID for future use (e.g., updating profile)
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    emailCtrl.dispose();
+    phoneCtrl.dispose();
+    dobCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadProfile() async {
@@ -63,29 +73,12 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
       String? imageUrl =
           user['profilePictureUrl'];
 
-      print('=== PROFILE IMAGE DEBUG ===');
-      print('Raw profilePictureUrl: ${user['profilePictureUrl']}');
-      print('Raw profileImage: ${user['profileImage']}');
-      print('Raw avatar: ${user['avatar']}');
-      print('Selected imageUrl: $imageUrl');
-
       // Filter out placeholder URLs
       if (imageUrl != null &&
           (imageUrl.contains('placeholder') ||
               imageUrl.contains('via.placeholder'))) {
-        print('Filtered out placeholder URL');
         imageUrl = null;
       }
-
-      print('Final imageUrl: $imageUrl');
-      print('===========================');
-
-      // Debug email
-      print('=== EMAIL DEBUG ===');
-      print('API email: ${user['email']}');
-      print('Local email: ${localData['email']}');
-      print('Saved email: $savedEmail');
-      print('===================');
 
       // Determine email - priority: API > saved credentials > local storage
       String? emailToUse = user['email'];
@@ -101,8 +94,8 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
         }
       }
 
+      if (!mounted) return;
       setState(() {
-        _userId = user['userId'] ?? user['_id'];
 
         // Full Name
         nameCtrl.text =
@@ -140,7 +133,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
 
         _isLoading = false;
       });
-      print('Profile loaded for user ID: $_userId');
+      AppLog.d('Profile loaded');
     } catch (e) {
       if (mounted) {
         _snack(
@@ -183,8 +176,12 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
     }
   }
 
-  void _snack(String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  void _snack(String m) {
+    // Called from async paths (image compression, profile save), so the page
+    // may already be gone by the time the message is ready.
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  }
 
   Future<void> _pickDob() async {
     final now = DateTime.now();
@@ -201,20 +198,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
     }
   }
 
-  String _monthName(int m) => const [
-        'January',
-        'February',
-        'March',
-        'April',
-        'May',
-        'June',
-        'July',
-        'August',
-        'September',
-        'October',
-        'November',
-        'December'
-      ][m - 1];
+  String _monthName(int m) => AppDate.monthLong(m);
 
   /// Format date string to "Month Day, Year" format without time
   String _formatDateString(String dateStr) {
@@ -400,7 +384,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
             );
           },
           errorBuilder: (context, error, stackTrace) {
-            print('Error loading profile image: $error');
+            AppLog.e('Failed to load profile image', error);
             return CircleAvatar(
               radius: 52,
               backgroundColor: Colors.grey[200],

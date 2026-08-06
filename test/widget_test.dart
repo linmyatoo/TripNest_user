@@ -1,28 +1,44 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripnest/main.dart';
+import 'package:tripnest/src/core/services/http_client.dart';
+import 'package:tripnest/src/features/splash/admin_splash_page.dart';
 
 void main() {
-  testWidgets('App test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const TripNestApp());
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    // The app must never reach the real backend from a test.
+    Http.overrideClient(MockClient((_) async => http.Response('[]', 200)));
+  });
 
-    // Verify that the app builds without crashing
-    // Note: We use pump() instead of pumpAndSettle() to avoid waiting
-    // for animations and async operations that might fail in tests
+  tearDown(Http.reset);
+
+  testWidgets('app starts on the splash page, not inside the shell',
+      (tester) async {
+    // Regression: initialRoute pointed straight at AppShell, so the login
+    // check never ran and a fresh install landed in a logged-in-looking app
+    // (which also spun up the real polling timers in this test).
+    await tester.pumpWidget(const TripNestApp());
     await tester.pump();
 
-    // Check that a MaterialApp widget exists
     expect(find.byType(MaterialApp), findsOneWidget);
+    expect(find.byType(AdminSplashPage), findsOneWidget);
+    expect(find.text('TripNest'), findsOneWidget);
 
-    // Clean up any pending timers from splash screen
-    await tester.pump(const Duration(milliseconds: 900));
+    // Let the splash's delayed navigation fire so no timer outlives the test.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('an unauthenticated user is sent to onboarding', (tester) async {
+    await tester.pumpWidget(const TripNestApp());
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AdminSplashPage), findsNothing);
   });
 }

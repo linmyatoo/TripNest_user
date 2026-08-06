@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:tripnest/src/core/services/auth_service.dart';
 import 'package:tripnest/src/core/services/security_service.dart';
 import 'package:tripnest/src/core/theme/app_colors.dart';
+import 'package:tripnest/src/core/utils/app_log.dart';
 import 'package:tripnest/src/core/widgets/settings_tile.dart';
 
 import 'change_password_page.dart';
@@ -62,7 +63,7 @@ class _ProfilePageState extends State<ProfilePage> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading profile: $e');
+      AppLog.e('Failed to load profile', e);
       // Fallback to local storage data if API fails
       try {
         final userData = await AuthService.getUserData();
@@ -184,7 +185,9 @@ class _ProfilePageState extends State<ProfilePage> {
                   builder: (_) => const _LogoutConfirmDialog(),
                 );
                 if (ok == true && mounted) {
-                  // Perform logout
+                  // AuthService.logout() is the single teardown point: it
+                  // clears the session plus favorites, notifications and the
+                  // AQI cache.
                   await AuthService.logout();
 
                   // Only clear saved credentials if Remember Password is disabled
@@ -194,6 +197,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     await SecurityService.clearSavedCredentials();
                   }
 
+                  if (!context.mounted) return;
                   // Navigate to login and remove all previous routes
                   Navigator.pushNamedAndRemoveUntil(
                       context, '/login', (_) => false);
@@ -268,7 +272,7 @@ class _LogoutConfirmDialog extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(context, false),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -286,7 +290,7 @@ class _LogoutConfirmDialog extends StatelessWidget {
                   onPressed: () => Navigator.pop(context, true),
                   style: OutlinedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF2563EB),
+                    foregroundColor: AppColors.primary,
                     side: const BorderSide(color: Color(0xFFE5E7EB)),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(

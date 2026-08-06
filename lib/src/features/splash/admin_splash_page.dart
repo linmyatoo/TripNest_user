@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/auth_service.dart';
+import '../../core/theme/app_colors.dart';
 
 class AdminSplashPage extends StatefulWidget {
   static const route = '/';
@@ -24,6 +25,7 @@ class _AdminSplashPageState extends State<AdminSplashPage> {
 
     // Check if user is already logged in
     final isLoggedIn = await AuthService.isLoggedIn();
+    if (!mounted) return;
 
     if (isLoggedIn) {
       // User is logged in, go to app
@@ -44,8 +46,8 @@ class _AdminSplashPageState extends State<AdminSplashPage> {
             end: Alignment.bottomRight,
             colors: [
               Color(0xFF60A5FA), // light blue
-              Color(0xFF3B82F6), // medium blue
-              Color(0xFF6366F1), // purple blue
+              AppColors.primaryLight, // medium blue
+              AppColors.primaryDeep, // purple blue
             ],
           ),
         ),
@@ -59,13 +61,20 @@ class _AdminSplashPageState extends State<AdminSplashPage> {
                   height: 80,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withValues(alpha: 0.15),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Image.asset(
                       'assets/icons/logo.png',
                       fit: BoxFit.contain,
+                      // A missing/unreadable asset otherwise reports an
+                      // uncaught image error on the very first screen.
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.travel_explore,
+                        color: Colors.white,
+                        size: 40,
+                      ),
                     ),
                   ),
                 ),

@@ -1,10 +1,35 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/app_log.dart';
+
+/// Result of a biometric authentication attempt.
+enum BiometricResult {
+  success,
+
+  /// User cancelled, or the prompt was dismissed.
+  cancelled,
+
+  /// Wrong finger/face, too many attempts, or hardware temporarily locked out.
+  failed,
+
+  /// No usable biometric hardware, or nothing enrolled.
+  unavailable,
+}
+
 class SecurityService {
   static final LocalAuthentication _localAuth = LocalAuthentication();
+
+  /// Credentials live in the Keychain / Android Keystore, never in
+  /// SharedPreferences: prefs are plaintext on disk and get swept into
+  /// unencrypted device backups.
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
 
   // Storage keys
   static const String _rememberPasswordKey = 'remember_password';
@@ -63,29 +88,62 @@ class SecurityService {
     final rememberEnabled = await isRememberPasswordEnabled();
     if (!rememberEnabled) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    // Simple base64 encoding for basic obfuscation (not true encryption)
-    final encodedPassword = base64Encode(utf8.encode(password));
-    await prefs.setString(_savedEmailKey, email);
-    await prefs.setString(_savedPasswordKey, encodedPassword);
+    await _secureStorage.write(key: _savedEmailKey, value: email);
+    await _secureStorage.write(key: _savedPasswordKey, value: password);
   }
 
   /// Get saved email
   static Future<String?> getSavedEmail() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_savedEmailKey);
+    try {
+      return await _secureStorage.read(key: _savedEmailKey);
+    } on PlatformException catch (e) {
+      AppLog.e('Secure storage read failed (email)', e);
+      return null;
+    }
   }
 
   /// Get saved password
   static Future<String?> getSavedPassword() async {
+    try {
+      return await _secureStorage.read(key: _savedPasswordKey);
+    } on PlatformException catch (e) {
+      AppLog.e('Secure storage read failed (password)', e);
+      return null;
+    }
+  }
+
+  /// Replace the stored password after a successful password change, so
+  /// prefill and biometric login stop replaying the old one.
+  static Future<void> updateSavedPassword(String newPassword) async {
+    final existingEmail = await getSavedEmail();
+    if (existingEmail == null) return;
+    await _secureStorage.write(key: _savedPasswordKey, value: newPassword);
+  }
+
+  /// One-time migration of the old base64-in-SharedPreferences credentials
+  /// into secure storage. Safe to call on every startup.
+  static Future<void> migrateLegacyCredentials() async {
     final prefs = await SharedPreferences.getInstance();
-    final encodedPassword = prefs.getString(_savedPasswordKey);
-    if (encodedPassword == null) return null;
+    final legacyEmail = prefs.getString(_savedEmailKey);
+    final legacyPassword = prefs.getString(_savedPasswordKey);
+    if (legacyEmail == null && legacyPassword == null) return;
 
     try {
-      return utf8.decode(base64Decode(encodedPassword));
-    } catch (_) {
-      return null;
+      if (legacyEmail != null && legacyEmail.isNotEmpty) {
+        await _secureStorage.write(key: _savedEmailKey, value: legacyEmail);
+      }
+      if (legacyPassword != null && legacyPassword.isNotEmpty) {
+        // Legacy values were base64(utf8(password)).
+        final decoded = utf8.decode(base64Decode(legacyPassword));
+        await _secureStorage.write(key: _savedPasswordKey, value: decoded);
+      }
+    } catch (e) {
+      AppLog.e('Legacy credential migration failed', e);
+    } finally {
+      // Remove the plaintext copies regardless: leaving them behind defeats
+      // the point of migrating.
+      await prefs.remove(_savedEmailKey);
+      await prefs.remove(_savedPasswordKey);
     }
   }
 
@@ -101,6 +159,9 @@ class SecurityService {
 
   /// Clear saved credentials
   static Future<void> clearSavedCredentials() async {
+    await _secureStorage.delete(key: _savedEmailKey);
+    await _secureStorage.delete(key: _savedPasswordKey);
+    // Also drop anything left over from the pre-migration plaintext storage.
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_savedEmailKey);
     await prefs.remove(_savedPasswordKey);
@@ -108,11 +169,15 @@ class SecurityService {
 
   // ==================== Biometric Authentication ====================
 
-  /// Check if device supports biometric authentication
+  /// Check if the device can actually do biometrics *and* has something
+  /// enrolled. `isDeviceSupported()` alone is true for a device-PIN-only
+  /// setup, which is not what "Face ID login" promises the user.
   static Future<bool> isBiometricSupported() async {
     try {
-      return await _localAuth.canCheckBiometrics ||
-          await _localAuth.isDeviceSupported();
+      if (!await _localAuth.isDeviceSupported()) return false;
+      if (!await _localAuth.canCheckBiometrics) return false;
+      final enrolled = await _localAuth.getAvailableBiometrics();
+      return enrolled.isNotEmpty;
     } catch (_) {
       return false;
     }
@@ -139,20 +204,55 @@ class SecurityService {
     return biometrics.contains(BiometricType.fingerprint);
   }
 
-  /// Authenticate with biometrics
+  /// Authenticate with biometrics.
+  ///
+  /// `biometricOnly: true` matters: with the default (false), a device PIN or
+  /// pattern satisfies the prompt, so "Face ID login" would accept a 4-digit
+  /// PIN from anyone holding the phone.
+  ///
+  /// `persistAcrossBackgrounding: true` retries after the OS backgrounds the
+  /// app mid-prompt (the 3.x name for the old `stickyAuth`), instead of
+  /// failing the attempt.
+  static Future<BiometricResult> authenticate(
+      {String reason = 'Please authenticate to login'}) async {
+    if (!await isBiometricSupported()) return BiometricResult.unavailable;
+
+    try {
+      final ok = await _localAuth.authenticate(
+        localizedReason: reason,
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
+      );
+      return ok ? BiometricResult.success : BiometricResult.failed;
+    } on LocalAuthException catch (e) {
+      AppLog.e('Biometric authentication failed (${e.code.name})');
+      switch (e.code) {
+        case LocalAuthExceptionCode.userCanceled:
+        case LocalAuthExceptionCode.systemCanceled:
+        case LocalAuthExceptionCode.timeout:
+        case LocalAuthExceptionCode.userRequestedFallback:
+          return BiometricResult.cancelled;
+        case LocalAuthExceptionCode.noBiometricsEnrolled:
+        case LocalAuthExceptionCode.noBiometricHardware:
+        case LocalAuthExceptionCode.noCredentialsSet:
+        case LocalAuthExceptionCode.biometricHardwareTemporarilyUnavailable:
+        case LocalAuthExceptionCode.uiUnavailable:
+          return BiometricResult.unavailable;
+        default:
+          // temporaryLockout, biometricLockout, authInProgress, deviceError,
+          // unknownError: all "try again / fall back to password".
+          return BiometricResult.failed;
+      }
+    } catch (e) {
+      AppLog.e('Biometric authentication failed', e);
+      return BiometricResult.failed;
+    }
+  }
+
+  /// Backwards-compatible boolean wrapper.
   static Future<bool> authenticateWithBiometrics(
       {String reason = 'Please authenticate to login'}) async {
-    try {
-      final isSupported = await isBiometricSupported();
-      if (!isSupported) return false;
-
-      return await _localAuth.authenticate(
-        localizedReason: reason,
-      );
-    } catch (e) {
-      print('Biometric authentication error: $e');
-      return false;
-    }
+    return await authenticate(reason: reason) == BiometricResult.success;
   }
 
   /// Check if biometric login is available and enabled
@@ -167,11 +267,6 @@ class SecurityService {
 
   // ==================== Clear All ====================
 
-  /// Clear all security settings (for logout)
-  static Future<void> clearAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    // Keep the settings but clear credentials
-    await prefs.remove(_savedEmailKey);
-    await prefs.remove(_savedPasswordKey);
-  }
+  /// Clear all security settings (keeps the toggles, drops credentials)
+  static Future<void> clearAll() => clearSavedCredentials();
 }

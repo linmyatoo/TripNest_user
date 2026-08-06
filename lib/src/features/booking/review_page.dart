@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:tripnest/src/app_router.dart';
 import 'package:tripnest/src/core/services/event_service.dart';
 import 'package:tripnest/src/core/services/review_service.dart';
 import 'package:tripnest/src/core/widgets/primary_button.dart';
@@ -183,12 +182,10 @@ class _ReviewPageState extends State<ReviewPage> {
         ),
       );
 
-      // Navigate to booking page
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        AppRoutes.myBooking,
-        (_) => false,
-      );
+      // Pop back to whatever pushed this page (the booking list), rather than
+      // wiping the navigator stack and leaving MyBookingPage without the
+      // surrounding tab shell.
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);

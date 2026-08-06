@@ -7,6 +7,7 @@ import '../../core/services/review_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/event.dart';
 import '../../widgets/event_card.dart';
+import '../../core/utils/app_log.dart';
 
 class FavoritesPage extends StatefulWidget {
   const FavoritesPage({super.key});
@@ -17,7 +18,7 @@ class FavoritesPage extends StatefulWidget {
 
 class _FavoritesPageState extends State<FavoritesPage> {
   List<Event> _favoriteEvents = [];
-  Map<String, double> _eventRatings = {};
+  final Map<String, double> _eventRatings = {};
   bool _isLoading = true;
 
   @override
@@ -35,22 +36,20 @@ class _FavoritesPageState extends State<FavoritesPage> {
 
     try {
       final favoriteIds = await FavoriteService.getFavoriteIds();
-      print('Loaded favorite IDs: $favoriteIds'); // Debug log
 
-      final List<Event> events = [];
-
-      // Fetch each favorited event
-      for (final id in favoriteIds) {
-        try {
-          print('Fetching event with ID: $id'); // Debug log
-          final event = await EventService.getEventById(id);
-          events.add(event);
-          print('Successfully loaded event: ${event.title}'); // Debug log
-        } catch (e) {
-          print('Failed to load event $id: $e'); // Debug log
-          // Skip events that can't be loaded
-        }
-      }
+      // Fetch in parallel: one round trip per favorite, serialised, made the
+      // list take as long as the slowest N requests summed together.
+      final results = await Future.wait(
+        favoriteIds.map((id) async {
+          try {
+            return await EventService.getEventById(id);
+          } catch (e) {
+            AppLog.e('Failed to load favorited event', e);
+            return null;
+          }
+        }),
+      );
+      final events = results.whereType<Event>().toList();
 
       if (mounted) {
         setState(() {
@@ -62,7 +61,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
         _loadEventRatings();
       }
     } catch (e) {
-      print('Error loading favorites: $e'); // Debug log
+      AppLog.e('Failed to load favorites', e);
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -71,24 +70,47 @@ class _FavoritesPageState extends State<FavoritesPage> {
     }
   }
 
+  /// Fetches every rating concurrently and applies them in a single setState,
+  /// instead of one rebuild per event.
   Future<void> _loadEventRatings() async {
-    for (final event in _favoriteEvents) {
+    final events = List<Event>.from(_favoriteEvents);
+    final ratings = <String, double>{};
+
+    await Future.wait(events.map((event) async {
       try {
         final rating = await ReviewService.getEventAverageRating(event.id);
-        if (rating != null && mounted) {
-          setState(() {
-            _eventRatings[event.id] = rating;
-          });
-        }
+        if (rating != null) ratings[event.id] = rating;
       } catch (e) {
-        debugPrint('Error loading rating for event ${event.id}: $e');
+        AppLog.e('Failed to load rating for event ${event.id}', e);
       }
-    }
+    }));
+
+    if (!mounted || ratings.isEmpty) return;
+    setState(() => _eventRatings.addAll(ratings));
   }
 
-  Future<void> _removeFavorite(String eventId) async {
-    await FavoriteService.removeFavorite(eventId);
-    _loadFavorites();
+  /// Removes the favorite, keeping the row in place if the removal fails —
+  /// a dismissed row whose item is still in the list throws.
+  Future<bool> _removeFavorite(String eventId) async {
+    try {
+      await FavoriteService.removeFavorite(eventId);
+      if (!mounted) return true;
+      setState(() {
+        _favoriteEvents.removeWhere((e) => e.id == eventId);
+        _eventRatings.remove(eventId);
+      });
+      return true;
+    } catch (e) {
+      AppLog.e('Failed to remove favorite', e);
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not remove this favorite. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return false;
+    }
   }
 
   @override
@@ -135,7 +157,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                           color: Colors.red,
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
-                        onDismissed: (_) => _removeFavorite(event.id),
+                        confirmDismiss: (_) => _removeFavorite(event.id),
                         child: EventCard(
                           event: event,
                           averageRating: _eventRatings[event.id],
@@ -145,8 +167,9 @@ class _FavoritesPageState extends State<FavoritesPage> {
                               AppRoutes.eventDetails,
                               arguments: event.id,
                             );
-                            // Reload favorites when returning (in case user unfavorited)
-                            _loadFavorites();
+                            // Reload when returning: the user may have
+                            // unfavorited from the detail page.
+                            if (mounted) _loadFavorites();
                           },
                         ),
                       );

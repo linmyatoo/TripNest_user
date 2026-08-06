@@ -1,16 +1,23 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/api_config.dart';
+import 'http_client.dart';
+import 'local_notification_service.dart';
 import 'notification_service.dart';
 
 class AirQualityData {
-  final int aqi;
-  final double pm25;
-  final double pm10;
+  /// Every reading is nullable because WAQI genuinely reports "no data".
+  ///
+  /// Defaulting a missing reading to 0 is worse than showing nothing: AQI 0
+  /// renders as "Good — perfect for outdoor activities", i.e. the app invents
+  /// health advice from a measurement it never received.
+  final int? aqi;
+  final double? pm25;
+  final double? pm10;
   final String cityName;
   final DateTime updatedAt;
-  final double temperature;
+  final double? temperature;
 
   AirQualityData({
     required this.aqi,
@@ -18,15 +25,22 @@ class AirQualityData {
     required this.pm10,
     required this.cityName,
     required this.updatedAt,
-    this.temperature = 0,
+    this.temperature,
   });
 
+  bool get hasAqi => aqi != null;
+
+  /// Value for the AQI badge; `--` when the station reported no index.
+  String get aqiDisplay => aqi?.toString() ?? '--';
+
   String get aqiLevel {
-    if (aqi <= 50) return 'Good';
-    if (aqi <= 100) return 'Moderate';
-    if (aqi <= 150) return 'Unhealthy for Sensitive Groups';
-    if (aqi <= 200) return 'Unhealthy';
-    if (aqi <= 300) return 'Very Unhealthy';
+    final value = aqi;
+    if (value == null) return 'Unavailable';
+    if (value <= 50) return 'Good';
+    if (value <= 100) return 'Moderate';
+    if (value <= 150) return 'Unhealthy for Sensitive Groups';
+    if (value <= 200) return 'Unhealthy';
+    if (value <= 300) return 'Very Unhealthy';
     return 'Hazardous';
   }
 
@@ -34,41 +48,53 @@ class AirQualityData {
   String get level => aqiLevel;
 
   int get colorValue {
-    if (aqi <= 50) return 0xFF16A34A; // Darker Green
-    if (aqi <= 100) return 0xFFCA8A04; // Dark Amber
-    if (aqi <= 150) return 0xFFEA580C; // Dark Orange
-    if (aqi <= 200) return 0xFFDC2626; // Red
-    if (aqi <= 300) return 0xFF7C3AED; // Purple
+    final value = aqi;
+    if (value == null) return 0xFF9AA0A6; // Neutral grey — no reading
+    if (value <= 50) return 0xFF16A34A; // Darker Green
+    if (value <= 100) return 0xFFCA8A04; // Dark Amber
+    if (value <= 150) return 0xFFEA580C; // Dark Orange
+    if (value <= 200) return 0xFFDC2626; // Red
+    if (value <= 300) return 0xFF7C3AED; // Purple
     return 0xFF991B1B; // Dark Maroon
   }
 
   int get backgroundColorValue {
-    if (aqi <= 50) return 0xFFDCFCE7; // Light green
-    if (aqi <= 100) return 0xFFFEF9C3; // Light yellow
-    if (aqi <= 150) return 0xFFFFEDD5; // Light orange
-    if (aqi <= 200) return 0xFFFEE2E2; // Light red
-    if (aqi <= 300) return 0xFFF3E8FF; // Light purple
+    final value = aqi;
+    if (value == null) return 0xFFF1F3F4; // Light grey
+    if (value <= 50) return 0xFFDCFCE7; // Light green
+    if (value <= 100) return 0xFFFEF9C3; // Light yellow
+    if (value <= 150) return 0xFFFFEDD5; // Light orange
+    if (value <= 200) return 0xFFFEE2E2; // Light red
+    if (value <= 300) return 0xFFF3E8FF; // Light purple
     return 0xFFFEE2E2; // Light red
   }
 
   String get healthRecommendation {
-    if (aqi <= 50) {
+    final value = aqi;
+    if (value == null) {
+      return 'No air quality reading is available for this location right now.';
+    }
+    if (value <= 50) {
       return 'Air quality is good. Perfect for outdoor activities!';
     }
-    if (aqi <= 100) {
+    if (value <= 100) {
       return 'Air quality is acceptable. Sensitive individuals should limit prolonged outdoor exertion.';
     }
-    if (aqi <= 150) {
+    if (value <= 150) {
       return 'Sensitive groups should reduce outdoor activities. Everyone else can continue normally.';
     }
-    if (aqi <= 200) {
+    if (value <= 200) {
       return 'Everyone may begin to experience health effects. Limit outdoor activities.';
     }
-    if (aqi <= 300) {
+    if (value <= 300) {
       return 'Health alert! Everyone should avoid outdoor activities.';
     }
     return 'Emergency conditions! Stay indoors and keep windows closed.';
   }
+
+  /// Formats a pollutant reading, or `--` when it is missing.
+  static String formatReading(double? value, {int decimals = 1}) =>
+      value?.toStringAsFixed(decimals) ?? '--';
 
   Map<String, dynamic> toJson() => {
         'aqi': aqi,
@@ -80,45 +106,71 @@ class AirQualityData {
       };
 
   factory AirQualityData.fromJson(Map<String, dynamic> json) => AirQualityData(
-        aqi: json['aqi'] ?? 0,
-        pm25: (json['pm25'] ?? 0).toDouble(),
-        pm10: (json['pm10'] ?? 0).toDouble(),
-        cityName: json['cityName'] ?? 'Unknown',
-        updatedAt: DateTime.tryParse(json['updatedAt'] ?? '') ?? DateTime.now(),
-        temperature: (json['temperature'] ?? 0).toDouble(),
+        aqi: parseInt(json['aqi']),
+        pm25: parseDouble(json['pm25']),
+        pm10: parseDouble(json['pm10']),
+        cityName: json['cityName']?.toString() ?? 'Unknown',
+        updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
+            DateTime.now(),
+        temperature: parseDouble(json['temperature']),
       );
+
+  /// Returns null for anything that isn't a number.
+  ///
+  /// WAQI sends the String `"-"` for unavailable readings, so this must not
+  /// throw a TypeError — and must not pretend the value was 0.
+  static int? parseInt(Object? value) => parseDouble(value)?.toInt();
+
+  static double? parseDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    // Handles "42" and "42.7" alike; returns null for "-", "", null.
+    return double.tryParse(value?.toString().trim() ?? '');
+  }
 }
 
 class AirQualityService {
-  static const String _apiToken = '004eb8cf677c3893baf0b3a7267ba39d3359f777';
-  static const String _baseUrl = 'https://api.waqi.info/feed';
   static const String _lastPm25Key = 'last_pm25_value';
   static const String _lastCheckDateKey = 'last_aqi_check_date';
   static const String _cachedAqiDataKey = 'cached_aqi_data';
   static const double _changeThreshold = 50;
 
+  /// Preference keys this service owns, so logout can clear them.
+  static const List<String> storageKeys = [
+    _lastPm25Key,
+    _lastCheckDateKey,
+    _cachedAqiDataKey,
+  ];
+
   /// Get air quality data for current location
   static Future<AirQualityData?> getAirQuality(
       {String location = 'here'}) async {
+    if (ApiConfig.isWaqiTokenMissing) {
+      debugPrint('Air quality disabled: WAQI token not configured.');
+      return null;
+    }
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/$location/?token=$_apiToken'),
+      final response = await Http.client.get(
+        Uri.parse(
+            '${ApiConfig.waqiBaseUrl}/$location/?token=${ApiConfig.waqiApiToken}'),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        if (data['status'] == 'ok') {
-          final aqiData = data['data'];
-          final iaqi = aqiData['iaqi'] ?? {};
+        if (data['status'] == 'ok' && data['data'] is Map) {
+          final aqiData = data['data'] as Map;
+          // On a non-ok status WAQI puts an error *string* in `data`, hence the
+          // type check above.
+          final iaqi = aqiData['iaqi'] is Map ? aqiData['iaqi'] as Map : {};
+          final city = aqiData['city'] is Map ? aqiData['city'] as Map : {};
 
           final airQuality = AirQualityData(
-            aqi: aqiData['aqi'] ?? 0,
-            pm25: (iaqi['pm25']?['v'] ?? 0).toDouble(),
-            pm10: (iaqi['pm10']?['v'] ?? 0).toDouble(),
-            cityName: aqiData['city']?['name'] ?? 'Unknown',
+            aqi: AirQualityData.parseInt(aqiData['aqi']),
+            pm25: AirQualityData.parseDouble(_reading(iaqi, 'pm25')),
+            pm10: AirQualityData.parseDouble(_reading(iaqi, 'pm10')),
+            cityName: city['name']?.toString() ?? 'Unknown',
             updatedAt: DateTime.now(),
-            temperature: (iaqi['t']?['v'] ?? 0).toDouble(),
+            temperature: AirQualityData.parseDouble(_reading(iaqi, 't')),
           );
 
           // Cache the data
@@ -132,6 +184,13 @@ class AirQualityService {
       debugPrint('Error fetching air quality: $e');
       return null;
     }
+  }
+
+  /// Pulls `iaqi.<pollutant>.v` defensively — any level of that path can be
+  /// missing or the wrong type.
+  static Object? _reading(Map iaqi, String key) {
+    final entry = iaqi[key];
+    return entry is Map ? entry['v'] : null;
   }
 
   /// Cache AQI data locally
@@ -174,57 +233,89 @@ class AirQualityService {
       final aqData = await getAirQuality();
       if (aqData == null) return;
 
+      // Nothing to report if the station sent no usable reading.
+      if (!aqData.hasAqi && aqData.pm25 == null) return;
+
+      final pm25 = aqData.pm25;
       bool shouldNotify = false;
+      bool isDailyUpdate = false;
       String notificationReason = '';
 
       if (!alreadyNotifiedToday) {
         // Daily notification (first check of the day)
         shouldNotify = true;
+        isDailyUpdate = true;
         notificationReason = 'Daily air quality update';
-        await prefs.setString(_lastCheckDateKey, todayStr);
-      } else if (lastPm25 != null) {
-        // Check for significant change (50+ threshold)
-        final change = (aqData.pm25 - lastPm25).abs();
+      } else if (lastPm25 != null && pm25 != null) {
+        // Check for significant change (50+ threshold). Both samples must be
+        // real readings — comparing against a missing value that defaulted to
+        // 0 produced a fake "PM2.5 decreased by 50" alert.
+        final change = (pm25 - lastPm25).abs();
         if (change >= _changeThreshold) {
           shouldNotify = true;
-          final direction = aqData.pm25 > lastPm25 ? 'increased' : 'decreased';
+          final direction = pm25 > lastPm25 ? 'increased' : 'decreased';
           notificationReason =
               'PM2.5 $direction by ${change.toStringAsFixed(1)}';
         }
       }
 
       if (shouldNotify) {
-        await NotificationService.addNotification(
-          title: 'Air Quality Alert - ${aqData.cityName}',
-          body:
-              'AQI: ${aqData.aqi} (${aqData.aqiLevel})\nPM2.5: ${aqData.pm25.toStringAsFixed(1)} μg/m³\n$notificationReason',
-        );
+        // A failed send must not abort the rest of the bookkeeping below, and
+        // must not mark today as already notified.
+        final sent = await _notify(aqData, notificationReason);
+        if (sent && isDailyUpdate) {
+          await prefs.setString(_lastCheckDateKey, todayStr);
+        }
       }
 
-      await prefs.setDouble(_lastPm25Key, aqData.pm25);
+      if (pm25 != null) {
+        await prefs.setDouble(_lastPm25Key, pm25);
+      }
     } finally {
       _isChecking = false;
     }
   }
 
-  /// Force check and notify (for manual refresh)
-  static Future<AirQualityData?> forceCheckAndNotify() async {
-    final aqData = await getAirQuality();
-    if (aqData == null) return null;
+  /// Sends the alert to both the in-app feed and the device.
+  ///
+  /// Returns false when the notification did not go out, so the caller does
+  /// not record it as delivered.
+  static Future<bool> _notify(AirQualityData aqData, String reason) async {
+    final title = 'Air Quality Alert - ${aqData.cityName}';
+    final body = 'AQI: ${aqData.aqiDisplay} (${aqData.aqiLevel})\n'
+        'PM2.5: ${AirQualityData.formatReading(aqData.pm25)} μg/m³\n$reason';
 
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateTime.now();
-    final todayStr = '${today.year}-${today.month}-${today.day}';
-
-    await prefs.setString(_lastCheckDateKey, todayStr);
-    await prefs.setDouble(_lastPm25Key, aqData.pm25);
-
-    return aqData;
+    try {
+      // Feed entry only — the native notification is sent below so it lands on
+      // the AQI channel and carries the payload that routes a tap.
+      await NotificationService.addNotification(
+        title: title,
+        body: body,
+        showNative: false,
+      );
+      await LocalNotificationService.showAqiNotification(
+        title: title,
+        body: body,
+        aqiValue: aqData.aqi ?? 0,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('Failed to send air quality notification: $e');
+      return false;
+    }
   }
 
   /// Get cached PM2.5 value
   static Future<double?> getCachedPm25() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getDouble(_lastPm25Key);
+  }
+
+  /// Drop all cached AQI state (called on logout)
+  static Future<void> clearCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in storageKeys) {
+      await prefs.remove(key);
+    }
   }
 }

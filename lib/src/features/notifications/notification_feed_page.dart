@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/booking_service.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/utils/date_format.dart';
 
 class NotificationFeedPage extends StatefulWidget {
   static const route = '/notifications-feed';
@@ -121,21 +123,7 @@ class _NotificationFeedPageState extends State<NotificationFeedPage> {
     if (weeks < 5) {
       return '${weeks}w ago';
     }
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    return '${months[local.month - 1]} ${local.day.toString().padLeft(2, '0')}, ${local.year}';
+    return '${AppDate.monthShort(local.month)} ${local.day.toString().padLeft(2, '0')}, ${local.year}';
   }
 
   @override
@@ -271,7 +259,7 @@ class _BookingNotificationCard extends StatelessWidget {
                     child: Text(
                       notification.title,
                       style: textTheme.titleMedium
-                          ?.copyWith(color: const Color(0xFF2563EB)),
+                          ?.copyWith(color: AppColors.primary),
                     ),
                   ),
                   Text(timeLabel, style: const TextStyle(color: Colors.grey)),
@@ -294,7 +282,7 @@ class _BookingNotificationCard extends StatelessWidget {
                     const TextSpan(text: 'Booking status: '),
                     TextSpan(
                       text: notification.bookingStatus ?? 'Confirmed',
-                      style: const TextStyle(color: Color(0xFF2563EB)),
+                      style: const TextStyle(color: AppColors.primary),
                     ),
                   ],
                 ),

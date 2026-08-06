@@ -43,7 +43,7 @@ class _SearchPageState extends State<SearchPage> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0xFF3B82F6),
+                AppColors.primaryLight,
                 Color(0xFF1D4ED8),
                 Color(0xFF1E3A8A),
               ],
@@ -59,7 +59,7 @@ class _SearchPageState extends State<SearchPage> {
             height: 200,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha: 0.1),
             ),
           ),
         ),
@@ -71,7 +71,7 @@ class _SearchPageState extends State<SearchPage> {
             height: 250,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.08),
+              color: Colors.white.withValues(alpha: 0.08),
             ),
           ),
         ),
@@ -97,7 +97,7 @@ class _SearchPageState extends State<SearchPage> {
                   'Search events by location, keyword, or mood',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -109,7 +109,7 @@ class _SearchPageState extends State<SearchPage> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
+                        color: Colors.black.withValues(alpha: 0.15),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -268,7 +268,7 @@ class _SearchPageState extends State<SearchPage> {
     return ActionChip(
       avatar: Icon(icon, size: 16, color: const Color.fromARGB(179, 24, 65, 227)),
       label: Text(label, style: const TextStyle(color: Color.fromARGB(179, 18, 92, 204))),
-      backgroundColor: Colors.white.withOpacity(0.2),
+      backgroundColor: Colors.white.withValues(alpha: 0.2),
       side: BorderSide.none,
       onPressed: () {
         setState(() {
@@ -284,6 +284,20 @@ class _SearchPageState extends State<SearchPage> {
       'keyword': keywordCtrl.text.trim(),
       'mood': mood,
     };
+
+    // A fully empty query used to navigate to a results page that could only
+    // ever say "no results".
+    final hasCriteria = query.values
+        .any((value) => value != null && value.toString().isNotEmpty);
+    if (!hasCriteria) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a location, keyword, or mood to search.'),
+        ),
+      );
+      return;
+    }
+
     Navigator.of(context).pushNamed(
       AppRoutes.searchResults,
       arguments: query,

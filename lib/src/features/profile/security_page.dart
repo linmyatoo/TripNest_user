@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/security_service.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/widgets/primary_button.dart';
 
 class SecurityPage extends StatefulWidget {
@@ -179,7 +180,17 @@ class _SecurityPageState extends State<SecurityPage> {
                   onChanged: _onBiometricChanged,
                   enabled: _fingerprintAvailable,
                 ),
-                const _ChevronTile(title: 'Google Authenticator'),
+                _ChevronTile(
+                  title: 'Google Authenticator',
+                  // No TOTP enrolment exists yet; the row used to have no
+                  // handler at all, so tapping it did nothing silently.
+                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                          'Authenticator app support is coming soon.'),
+                    ),
+                  ),
+                ),
                 const Spacer(),
                 PrimaryButton(
                   label: _isSaving ? 'Saving...' : 'Save',
@@ -249,22 +260,31 @@ class _SwitchTile extends StatelessWidget {
 
 class _ChevronTile extends StatelessWidget {
   final String title;
-  const _ChevronTile({required this.title});
+  final VoidCallback? onTap;
+  const _ChevronTile({required this.title, this.onTap});
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 54,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-          color: const Color(0xFFF4F6F8),
-          borderRadius: BorderRadius.circular(12)),
-      child: Row(children: [
-        Expanded(
-            child: Text(title,
-                style: const TextStyle(fontWeight: FontWeight.w600))),
-        const Icon(Icons.chevron_right_rounded),
-      ]),
+    final enabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 54,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+            color: const Color(0xFFF4F6F8),
+            borderRadius: BorderRadius.circular(12)),
+        child: Row(children: [
+          Expanded(
+              child: Text(title,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: enabled ? null : AppColors.muted))),
+          Icon(Icons.chevron_right_rounded,
+              color: enabled ? null : AppColors.muted),
+        ]),
+      ),
     );
   }
 }

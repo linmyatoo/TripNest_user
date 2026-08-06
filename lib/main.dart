@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'src/app_router.dart';
 import 'src/core/services/local_notification_service.dart';
+import 'src/core/services/security_service.dart';
 import 'src/core/theme/app_colors.dart';
+import 'src/features/splash/admin_splash_page.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -10,6 +12,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocalNotificationService.initialize();
   await LocalNotificationService.requestPermissions();
+  // Moves any pre-existing plaintext credentials into secure storage.
+  await SecurityService.migrateLegacyCredentials();
   runApp(const TripNestApp());
 }
 
@@ -63,7 +67,7 @@ class TripNestApp extends StatelessWidget {
         ),
       ),
       onGenerateRoute: AppRouter.onGenerateRoute,
-      initialRoute: AppRoutes.appShell,
+      initialRoute: AdminSplashPage.route,
     );
   }
 }

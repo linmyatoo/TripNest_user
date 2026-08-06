@@ -33,7 +33,7 @@ class _NotificationsSettingsPageState extends State<NotificationsSettingsPage> {
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
 
-    final settings = await NotificationService.getAllSettings();
+    final settings = await NotificationSettingsService.getAllSettings();
 
     if (mounted) {
       setState(() {
@@ -53,7 +53,7 @@ class _NotificationsSettingsPageState extends State<NotificationsSettingsPage> {
     setState(() => _isSaving = true);
 
     try {
-      await NotificationService.saveAllSettings(
+      await NotificationSettingsService.saveAllSettings(
         notifications: _notifications,
         sound: _sound,
         vibrate: _vibrate,

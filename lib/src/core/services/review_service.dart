@@ -1,11 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'session.dart';
+import 'http_client.dart';
+import '../config/api_endpoints.dart';
 
 class ReviewService {
-  static const String baseUrl = 'https://naylinhtet.me/api';
+  static const String baseUrl = ApiEndpoints.baseUrl;
 
   /// Get auth token from storage
   static Future<String?> _getToken() async {
@@ -37,7 +39,7 @@ class ReviewService {
         body['comment'] = comment;
       }
 
-      final response = await http.post(
+      final response = await Http.client.post(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -73,7 +75,7 @@ class ReviewService {
       final url = Uri.parse('$baseUrl/reviews/event/$eventId');
       debugPrint('Fetching reviews from: $url');
 
-      final response = await http.get(
+      final response = await Http.client.get(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -83,6 +85,9 @@ class ReviewService {
 
       debugPrint('Reviews response status: ${response.statusCode}');
       debugPrint('Reviews response body: ${response.body}');
+
+      Session.checkResponse(response);
+
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -110,7 +115,7 @@ class ReviewService {
       final url = Uri.parse('$baseUrl/reviews/event/$eventId/rating');
       debugPrint('Fetching average rating from: $url');
 
-      final response = await http.get(
+      final response = await Http.client.get(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -119,6 +124,9 @@ class ReviewService {
       );
 
       debugPrint('Average rating response status: ${response.statusCode}');
+
+      Session.checkResponse(response);
+
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

@@ -17,7 +17,7 @@ class SearchResultsPage extends StatefulWidget {
 
 class _SearchResultsPageState extends State<SearchResultsPage> {
   List<Event> _results = [];
-  Map<String, double> _eventRatings = {};
+  final Map<String, double> _eventRatings = {};
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -68,19 +68,23 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
     }
   }
 
+  /// Loads every rating concurrently and applies them in one rebuild, rather
+  /// than one sequential request and one setState per result.
   Future<void> _loadEventRatings() async {
-    for (final event in _results) {
+    final events = List<Event>.from(_results);
+    final ratings = <String, double>{};
+
+    await Future.wait(events.map((event) async {
       try {
         final rating = await ReviewService.getEventAverageRating(event.id);
-        if (rating != null && mounted) {
-          setState(() {
-            _eventRatings[event.id] = rating;
-          });
-        }
+        if (rating != null) ratings[event.id] = rating;
       } catch (e) {
         debugPrint('Error loading rating for event ${event.id}: $e');
       }
-    }
+    }));
+
+    if (!mounted || ratings.isEmpty) return;
+    setState(() => _eventRatings.addAll(ratings));
   }
 
   String _getSearchSummary() {

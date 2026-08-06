@@ -4,8 +4,16 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/app_log.dart';
+import 'air_quality_service.dart';
+import 'favorite_service.dart';
+import 'notification_service.dart';
+import 'session.dart';
+import 'http_client.dart';
+import '../config/api_endpoints.dart';
+
 class AuthService {
-  static const String baseUrl = 'https://naylinhtet.me/api';
+  static const String baseUrl = ApiEndpoints.baseUrl;
 
   // Storage keys
   static const String _tokenKey = 'auth_token';
@@ -25,7 +33,7 @@ class AuthService {
       throw Exception('Not authenticated');
     }
     final url = Uri.parse('$baseUrl/auth/change-password');
-    final response = await http.post(
+    final response = await Http.client.post(
       url,
       headers: {
         'Content-Type': 'application/json',
@@ -36,6 +44,7 @@ class AuthService {
         'newPassword': newPassword,
       }),
     );
+    Session.checkResponse(response);
     final data = jsonDecode(response.body);
     if (response.statusCode == 200) {
       return data;
@@ -91,7 +100,11 @@ class AuthService {
     return token != null && token.isNotEmpty;
   }
 
-  /// Logout user
+  /// Logout user.
+  ///
+  /// This is the single teardown point for a session: every piece of
+  /// per-user state has to be dropped here, or the next account that logs
+  /// in on this device inherits it (favorites, notification feed, AQI cache).
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
@@ -100,13 +113,20 @@ class AuthService {
     await prefs.remove(_nameKey);
     await prefs.remove(_emailKey);
     await prefs.remove(_roleKey);
+
+    await FavoriteService.clearFavorites();
+    await NotificationService.clearAll();
+    await AirQualityService.clearCache();
+    // Saved credentials are deliberately kept: "remember password" is an
+    // explicit opt-in that is supposed to outlive a logout. SecurityService
+    // clears them when the user turns that setting off.
   }
 
   /// Register a new user
   /// Returns a Map with the response data if successful, or throws an exception
   static Future<Map<String, dynamic>> register({
     required String username,
-    required String phone_number,
+    required String phoneNumber,
     required String email,
     required String password,
     String role = 'user', // default role is 'user'
@@ -114,31 +134,23 @@ class AuthService {
     try {
       final url = Uri.parse('$baseUrl/auth/register');
 
-      print('Registering user at: $url');
-      print('Request body: ${jsonEncode({
-            'name': username,
-            'phone_number': phone_number,
-            'email': email,
-            'password': password,
-            'role': role,
-          })}');
+      AppLog.d('POST /auth/register');
 
-      final response = await http.post(
+      final response = await Http.client.post(
         url,
         headers: {
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
           'name': username,
-          'phone_number': phone_number,
+          'phone_number': phoneNumber,
           'email': email,
           'password': password,
           'role': role,
         }),
       );
 
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+      AppLog.d('POST /auth/register -> ${response.statusCode}');
 
       final data = jsonDecode(response.body);
 
@@ -150,7 +162,7 @@ class AuthService {
         throw Exception(data['message'] ?? 'Registration failed');
       }
     } catch (e) {
-      print('Registration error: $e');
+      AppLog.e('Registration failed', e);
       if (e.toString().contains('Exception:')) {
         rethrow;
       }
@@ -166,7 +178,7 @@ class AuthService {
     try {
       final url = Uri.parse('$baseUrl/auth/login');
 
-      final response = await http.post(
+      final response = await Http.client.post(
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -192,7 +204,7 @@ class AuthService {
             role: _firstNonEmpty(user, ['role']) ?? 'user',
           );
         } else {
-          print('Login succeeded but no token was found in the response.');
+          AppLog.e('Login succeeded but no token was found in the response.');
         }
         return data;
       } else {
@@ -215,7 +227,7 @@ class AuthService {
         throw Exception('Not authenticated');
       }
 
-      final response = await http.get(
+      final response = await Http.client.get(
         Uri.parse('$baseUrl/profile/me'),
         headers: {
           'Content-Type': 'application/json',
@@ -223,11 +235,8 @@ class AuthService {
         },
       );
 
-      print('=================================');
-      print('PROFILE ME RESPONSE');
-      print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-      print('=================================');
+      AppLog.d('GET /profile/me -> ${response.statusCode}');
+      Session.checkResponse(response);
 
       if (response.statusCode >= 500) {
         throw Exception('Server error. Please try again later.');
@@ -241,7 +250,7 @@ class AuthService {
       try {
         data = jsonDecode(response.body);
       } catch (e) {
-        print('JSON Parse Error: $e');
+        AppLog.e('JSON parse error', e);
         throw Exception('Invalid server response');
       }
 
@@ -266,7 +275,7 @@ class AuthService {
         throw Exception('Not authenticated');
       }
 
-      final response = await http.get(
+      final response = await Http.client.get(
         Uri.parse('$baseUrl/profile/$userId'),
         headers: {
           'Content-Type': 'application/json',
@@ -274,11 +283,8 @@ class AuthService {
         },
       );
 
-      print('=================================');
-      print('PROFILE BY ID RESPONSE');
-      print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-      print('=================================');
+      AppLog.d('GET /profile/:id -> ${response.statusCode}');
+      Session.checkResponse(response);
 
       if (response.statusCode >= 500) {
         throw Exception('Server error. Please try again later.');
@@ -292,7 +298,7 @@ class AuthService {
       try {
         data = jsonDecode(response.body);
       } catch (e) {
-        print('JSON Parse Error: $e');
+        AppLog.e('JSON parse error', e);
         throw Exception('Invalid server response');
       }
 
@@ -323,22 +329,18 @@ class AuthService {
       request.headers['Authorization'] = 'Bearer $token';
       request.files.add(await http.MultipartFile.fromPath('image', filePath));
 
-      print('=================================');
-      print('UPLOADING PROFILE IMAGE');
-      print('File path: $filePath');
-      print('Endpoint: $uri');
-      print('=================================');
+      AppLog.d('POST /profile/upload-image');
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      print('Upload Response Status: ${response.statusCode}');
-      print('Upload Response Body: ${response.body}');
+      AppLog.d('POST /profile/upload-image -> ${response.statusCode}');
+      Session.checkResponse(response);
 
       // Handle empty response
       if (response.body.isEmpty) {
         if (response.statusCode == 200 || response.statusCode == 201) {
-          print('Upload successful but no URL returned');
+          AppLog.d('Upload succeeded but no URL was returned');
           return null;
         }
         throw Exception(
@@ -362,7 +364,7 @@ class AuthService {
       } catch (e) {
         if (e is FormatException) {
           // Server returned non-JSON response
-          print('Server returned non-JSON response: ${response.body}');
+          AppLog.e('Upload returned a non-JSON response');
           if (response.statusCode == 404) {
             throw Exception(
                 'Image upload endpoint not found. Please check API.');
@@ -374,7 +376,7 @@ class AuthService {
         rethrow;
       }
     } catch (e) {
-      print('Image upload error: $e');
+      AppLog.e('Image upload failed', e);
       if (e.toString().contains('Exception:')) {
         rethrow;
       }
@@ -420,7 +422,7 @@ class AuthService {
         body['profilePictureUrl'] = profilePictureUrl;
       }
 
-      final response = await http.patch(
+      final response = await Http.client.patch(
         Uri.parse('$baseUrl/profile/me'),
         headers: {
           'Content-Type': 'application/json',
@@ -429,11 +431,9 @@ class AuthService {
         body: jsonEncode(body),
       );
 
-      print('=================================');
-      print('UPDATE PROFILE RESPONSE');
-      print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-      print('=================================');
+      AppLog.d('PATCH /profile/me -> ${response.statusCode}');
+    Session.checkResponse(response);
+      Session.checkResponse(response);
 
       if (response.statusCode >= 500) {
         throw Exception('Server error. Please try again later.');
@@ -450,7 +450,7 @@ class AuthService {
       try {
         data = jsonDecode(response.body);
       } catch (e) {
-        print('JSON Parse Error: $e');
+        AppLog.e('JSON parse error', e);
         throw Exception('Invalid server response');
       }
 
@@ -507,19 +507,13 @@ class AuthService {
       filename: 'profile_image.jpg',
     ));
 
-    print('=================================');
-    print('UPDATE PROFILE WITH IMAGE');
-    print('File path: $imageFilePath');
-    print('Content-Type: $contentType');
-    print('Field name: profilePicture');
-    print('Fields: ${request.fields}');
-    print('=================================');
+    AppLog.d('PATCH /profile/me (multipart, $contentType)');
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
 
-    print('Response Status: ${response.statusCode}');
-    print('Response Body: ${response.body}');
+    AppLog.d('PATCH /profile/me -> ${response.statusCode}');
+    Session.checkResponse(response);
 
     if (response.statusCode >= 500) {
       throw Exception('Server error. Please try again later.');
@@ -536,7 +530,7 @@ class AuthService {
     try {
       data = jsonDecode(response.body);
     } catch (e) {
-      print('JSON Parse Error: $e');
+      AppLog.e('JSON parse error', e);
       throw Exception('Invalid server response');
     }
 
@@ -556,7 +550,7 @@ class AuthService {
         throw Exception('Not authenticated');
       }
 
-      final response = await http.get(
+      final response = await Http.client.get(
         Uri.parse('$baseUrl/user/profile'),
         headers: {
           'Content-Type': 'application/json',
@@ -564,11 +558,8 @@ class AuthService {
         },
       );
 
-      print('=================================');
-      print('USER PROFILE RESPONSE');
-      print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-      print('=================================');
+      AppLog.d('GET /user/profile -> ${response.statusCode}');
+      Session.checkResponse(response);
 
       if (response.statusCode >= 500) {
         throw Exception('Server error. Please try again later.');
@@ -582,7 +573,7 @@ class AuthService {
       try {
         data = jsonDecode(response.body);
       } catch (e) {
-        print('JSON Parse Error: $e');
+        AppLog.e('JSON parse error', e);
         if (response.body.contains('<!DOCTYPE html>') ||
             response.body.contains('<html>')) {
           throw Exception('Server error occurred. Please try again later.');
@@ -591,21 +582,13 @@ class AuthService {
       }
 
       if (response.statusCode == 200 && data['success'] == true) {
-        print('=================================');
-        print('USER PROFILE LOADED');
-        print('=================================');
-        print('User ID: ${data['user']['_id']}');
-        print('Username: ${data['user']['username']}');
-        print('Email: ${data['user']['email']}');
-        print('Phone: ${data['user']['phone_number']}');
-        print('Role: ${data['user']['role']}');
-        print('=================================');
+        AppLog.d('User profile loaded');
         return data;
       } else {
         throw Exception(data['message'] ?? 'Failed to load profile');
       }
     } on FormatException catch (e) {
-      print('Format Exception: $e');
+      AppLog.e('Server response format error', e);
       throw Exception('Server response format error');
     } catch (e) {
       if (e.toString().contains('Exception:')) {
@@ -620,7 +603,7 @@ class AuthService {
     required String email,
   }) async {
     try {
-      final response = await http.post(
+      final response = await Http.client.post(
         Uri.parse('$baseUrl/auth/forgot-password'),
         headers: {
           'Content-Type': 'application/json',
@@ -630,11 +613,7 @@ class AuthService {
         }),
       );
 
-      print('=================================');
-      print('FORGOT PASSWORD RESPONSE');
-      print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-      print('=================================');
+      AppLog.d('POST /auth/forgot-password -> ${response.statusCode}');
 
       // Handle server errors
       if (response.statusCode >= 500) {
@@ -655,7 +634,7 @@ class AuthService {
       try {
         data = jsonDecode(response.body);
       } catch (e) {
-        print('JSON Parse Error: $e');
+        AppLog.e('JSON parse error', e);
 
         if (response.body.contains('<!DOCTYPE html>') ||
             response.body.contains('<html>')) {
@@ -671,7 +650,7 @@ class AuthService {
         throw Exception(data['message'] ?? 'Failed to send reset link');
       }
     } on FormatException catch (e) {
-      print('Format Exception: $e');
+      AppLog.e('Server response format error', e);
       throw Exception('Server response format error');
     } catch (e) {
       if (e.toString().contains('Exception:')) {

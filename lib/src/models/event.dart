@@ -1,3 +1,5 @@
+import '../core/utils/app_log.dart';
+
 class Event {
   static const String _placeholderImage = 'https://via.placeholder.com/400x300';
 
@@ -47,25 +49,59 @@ class Event {
       gallery: combinedGallery,
     );
 
+    final location = json['location']?.toString() ?? '';
+
     return Event(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      description: json['description'] ?? '',
-      location: json['location'] ?? '',
-      shortLocation: _extractShortLocation(json['location'] ?? ''),
-      date:
-        json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
-      priceBaht: (json['price'] ?? 0).toInt(),
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      location: location,
+      shortLocation: _extractShortLocation(location),
+      date: _parseDate(json['date']) ?? DateTime.now(),
+      priceBaht: _parseInt(json['price']) ?? 0,
       imageUrl: resolvedImageUrl,
       gallery: combinedGallery,
-      capacity: json['capacity'],
-      availableTickets: json['availableTickets'],
-      bookedTickets: json['bookedTickets'],
-      createdAt:
-        json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
-      updatedAt:
-        json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
+      capacity: _parseInt(json['capacity']),
+      availableTickets: _parseInt(json['availableTickets']),
+      bookedTickets: _parseInt(json['bookedTickets']),
+      createdAt: _parseDate(json['createdAt']),
+      updatedAt: _parseDate(json['updatedAt']),
     );
+  }
+
+  /// Parse a list of events, dropping records the server sent malformed.
+  ///
+  /// A single bad row used to throw out of [Event.fromJson] and take the whole
+  /// response with it — 29 good events would vanish behind "Network error"
+  /// because of one empty `date`.
+  static List<Event> listFromJson(Iterable<dynamic> raw) {
+    final events = <Event>[];
+    for (final item in raw) {
+      if (item is! Map<String, dynamic>) continue;
+      try {
+        events.add(Event.fromJson(item));
+      } catch (e) {
+        AppLog.e('Skipping malformed event record', e);
+      }
+    }
+    return events;
+  }
+
+  /// Tolerates ints, numeric strings, and nulls. Never throws.
+  static int? _parseInt(Object? value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
+  /// Tolerates ISO strings, epoch millis, and junk like `""`. Never throws.
+  static DateTime? _parseDate(Object? value) {
+    if (value is DateTime) return value;
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    }
+    if (value is String) return DateTime.tryParse(value.trim());
+    return null;
   }
 
   static String _resolvePrimaryImage({

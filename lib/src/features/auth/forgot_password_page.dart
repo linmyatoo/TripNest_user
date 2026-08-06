@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/primary_button.dart';
+import '../../core/theme/app_colors.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   static const route = '/forgot-password';
@@ -131,7 +132,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                     child: const Text(
                       'Sign In',
                       style: TextStyle(
-                        color: Color(0xFF2563EB),
+                        color: AppColors.primary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -187,7 +188,7 @@ class _ForgotPasswordSuccessDialog extends StatelessWidget {
                   width: 64,
                   height: 64,
                   decoration: const BoxDecoration(
-                    color: Color(0xFF2563EB),
+                    color: AppColors.primary,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -215,7 +216,7 @@ class _ForgotPasswordSuccessDialog extends StatelessWidget {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
