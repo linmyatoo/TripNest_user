@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/services/chat_service.dart';
 import 'chat_thread_page.dart';
+import '../../core/theme/app_colors.dart';
 
 // Global notifier for unread message count
 class MessageNotifier extends ChangeNotifier {
@@ -48,24 +47,46 @@ class _MessagesPageState extends State<MessagesPage> {
   List<ChatRoom> _chatRooms = [];
   bool _isLoading = false;
   String? _errorMessage;
-  Timer? _refreshTimer;
   int _lastKnownMessageCount = 0;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadLastKnownCount();
     _loadChatRooms();
-    // Auto-refresh every 5 seconds for real-time updates
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _refreshChatRooms();
-    });
+    // Refreshes when the shell's poller reports new messages, plus pull-to-
+    // refresh. This page used to run its own 5s timer on top of the shell's,
+    // and it kept firing while the tab was hidden inside the IndexedStack.
+    MessageNotifier().addListener(_onUnreadChanged);
+  }
+
+  void _onUnreadChanged() {
+    if (!mounted) return;
+    if (MessageNotifier().unreadCount > 0) _refreshChatRooms();
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
+    MessageNotifier().removeListener(_onUnreadChanged);
+    _searchController.dispose();
     super.dispose();
+  }
+
+  /// Rooms matching the search box. The field used to have no controller at
+  /// all, so typing in it did nothing.
+  List<ChatRoom> get _visibleRooms {
+    if (_searchQuery.isEmpty) return _chatRooms;
+    final query = _searchQuery.toLowerCase();
+    return _chatRooms.where((room) {
+      final title = room.eventTitle.toLowerCase();
+      final lastMessage = room.lastMessage?.content.toLowerCase() ?? '';
+      final sender = room.lastMessage?.senderName.toLowerCase() ?? '';
+      return title.contains(query) ||
+          lastMessage.contains(query) ||
+          sender.contains(query);
+    }).toList();
   }
 
   Future<void> _loadLastKnownCount() async {
@@ -95,11 +116,11 @@ class _MessagesPageState extends State<MessagesPage> {
   Future<void> _refreshChatRooms() async {
     if (!mounted) return;
     try {
-      final rooms = await ChatService.getChatRooms();
+      final rooms = await ChatService.getBookedChatRooms();
       if (!mounted) return;
-      
+
       final currentCount = _getTotalMessageCount(rooms);
-      
+
       // Check if there are new messages
       if (currentCount != _lastKnownMessageCount && _lastKnownMessageCount != 0) {
         // New messages arrived - update the notification count
@@ -143,11 +164,11 @@ class _MessagesPageState extends State<MessagesPage> {
     });
 
     try {
-      final rooms = await ChatService.getChatRooms();
+      final rooms = await ChatService.getBookedChatRooms();
       if (!mounted) return;
-      
+
       final currentCount = _getTotalMessageCount(rooms);
-      
+
       // If first load, save the count
       if (_lastKnownMessageCount == 0) {
         _saveLastKnownCount(currentCount);
@@ -193,6 +214,51 @@ class _MessagesPageState extends State<MessagesPage> {
     return '${dateTime.month}/${dateTime.day}/${dateTime.year}';
   }
 
+  /// Ask, then leave. Returns true only when the room is actually gone, and
+  /// removes it by id so a concurrent refresh can't shift indices underneath.
+  Future<bool> _confirmLeaveRoom(ChatRoom room) async {
+    final shouldLeave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Leave Chat Room'),
+        content: const Text('Are you sure you want to leave this chat room?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+    if (shouldLeave != true) return false;
+
+    try {
+      await ChatService.leaveChatRoom(room.id);
+      if (!mounted) return false;
+      setState(() {
+        _chatRooms.removeWhere((r) => r.id == room.id);
+      });
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().contains('not a member')
+                ? 'You are not a member of this chat room.'
+                : 'Failed to leave chat room.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -202,9 +268,22 @@ class _MessagesPageState extends State<MessagesPage> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(
+              controller: _searchController,
+              onChanged: (value) =>
+                  setState(() => _searchQuery = value.trim()),
+              textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 hintText: 'Search your chat',
                 prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      ),
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                 filled: true,
@@ -237,15 +316,29 @@ class _MessagesPageState extends State<MessagesPage> {
                           ],
                         ),
                       )
-                    : _chatRooms.isEmpty
-                        ? const Center(
+                    : _visibleRooms.isEmpty
+                        ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.mail_outline,
+                                const Icon(Icons.mail_outline,
                                     size: 48, color: Colors.grey),
-                                SizedBox(height: 12),
-                                Text('No messages yet'),
+                                const SizedBox(height: 12),
+                                Text(_searchQuery.isEmpty
+                                    ? 'No messages yet'
+                                    : 'No chats match "$_searchQuery"'),
+                                if (_searchQuery.isEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  const Padding(
+                                    padding:
+                                        EdgeInsets.symmetric(horizontal: 32),
+                                    child: Text(
+                                      'Book an event to join its chat.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           )
@@ -253,11 +346,11 @@ class _MessagesPageState extends State<MessagesPage> {
                             onRefresh: _loadChatRooms,
                             child: ListView.separated(
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                              itemCount: _chatRooms.length,
+                              itemCount: _visibleRooms.length,
                               separatorBuilder: (_, __) =>
                                   const SizedBox(height: 12),
                               itemBuilder: (context, index) {
-                                final room = _chatRooms[index];
+                                final room = _visibleRooms[index];
                                 return Dismissible(
                                   key: ValueKey(room.id),
                                   direction: DismissDirection.endToStart,
@@ -281,46 +374,13 @@ class _MessagesPageState extends State<MessagesPage> {
                                       ],
                                     ),
                                   ),
-                                  confirmDismiss: (direction) async {
-                                    // Show confirmation dialog
-                                    return await showDialog<bool>(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: const Text('Leave Chat Room'),
-                                        content: const Text('Are you sure you want to leave this chat room?'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.of(ctx).pop(false),
-                                            child: const Text('Cancel'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () => Navigator.of(ctx).pop(true),
-                                            child: const Text('Leave'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                  onDismissed: (direction) async {
-                                    try {
-                                      await ChatService.leaveChatRoom(room.id);
-                                      setState(() {
-                                        _chatRooms.removeAt(index);
-                                      });
-                                    } catch (e) {
-                                      // Optionally show error if not a member
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            e.toString().contains('not a member')
-                                              ? 'You are not a member of this chat room.'
-                                              : 'Failed to leave chat room.',
-                                          ),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                    }
-                                  },
+                                  // The leave request runs inside
+                                  // confirmDismiss, not onDismissed: a failed
+                                  // request must return false so the row stays
+                                  // in the tree. Dismissing a row whose item is
+                                  // still in the list throws.
+                                  confirmDismiss: (direction) =>
+                                      _confirmLeaveRoom(room),
                                   child: _chatCell(
                                     context,
                                     name: room.eventTitle,
@@ -371,7 +431,7 @@ class _MessagesPageState extends State<MessagesPage> {
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: const Color(0xFF2563EB),
+              backgroundColor: AppColors.primary,
               backgroundImage: imageUrl != null && imageUrl.isNotEmpty
                   ? NetworkImage(imageUrl)
                   : null,

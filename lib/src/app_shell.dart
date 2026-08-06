@@ -23,7 +23,13 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
+  /// How often to poll for new chat messages while the app is in the
+  /// foreground. The old 5s interval meant ~700 requests/hour from this timer
+  /// alone, and it kept firing while the app was backgrounded.
+  static const Duration _messagePollInterval = Duration(seconds: 20);
+  static const Duration _aqiPollInterval = Duration(minutes: 30);
+
   late int idx;
 
   // Key to force rebuild favorites page when tab is selected
@@ -45,17 +51,39 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     idx = widget.initialIndex;
+    WidgetsBinding.instance.addObserver(this);
     _messageNotifier.addListener(_onMessageCountChanged);
-    // Start checking for new messages every 5 seconds
     _loadLastKnownMessageIds();
-    _messageCheckTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _startPolling();
+    _checkAqi(); // Initial check
+  }
+
+  /// This shell owns the only message/AQI pollers in the app.
+  void _startPolling() {
+    _messageCheckTimer ??= Timer.periodic(_messagePollInterval, (_) {
       _checkForNewMessages();
     });
-    // Check AQI every 30 minutes for background updates
-    _checkAqi(); // Initial check
-    _aqiCheckTimer = Timer.periodic(const Duration(minutes: 30), (_) {
+    _aqiCheckTimer ??= Timer.periodic(_aqiPollInterval, (_) {
       _checkAqi();
     });
+  }
+
+  void _stopPolling() {
+    _messageCheckTimer?.cancel();
+    _messageCheckTimer = null;
+    _aqiCheckTimer?.cancel();
+    _aqiCheckTimer = null;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // No point polling a backgrounded app; it only drains battery and quota.
+    if (state == AppLifecycleState.resumed) {
+      _startPolling();
+      _checkForNewMessages();
+    } else {
+      _stopPolling();
+    }
   }
 
   Future<void> _checkAqi() async {
@@ -71,8 +99,8 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
-    _messageCheckTimer?.cancel();
-    _aqiCheckTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _stopPolling();
     _messageNotifier.removeListener(_onMessageCountChanged);
     super.dispose();
   }
@@ -99,7 +127,8 @@ class _AppShellState extends State<AppShell> {
   Future<void> _checkForNewMessages() async {
     if (!mounted) return;
     try {
-      final rooms = await ChatService.getChatRooms();
+      // Booking-gated: badge must not count rooms the user has no booking for.
+      final rooms = await ChatService.getBookedChatRooms();
       if (!mounted) return;
 
       // Get current user ID from profile API to match message senderId format
@@ -110,7 +139,6 @@ class _AppShellState extends State<AppShell> {
         currentUserId =
             (profileData['userId'] ?? profileData['id'] ?? profileData['_id'])
                 ?.toString();
-        debugPrint('Current userId for notification check: $currentUserId');
       } catch (e) {
         // Fallback to stored user ID
         currentUserId = await AuthService.getUserId();
@@ -201,7 +229,15 @@ class _AppShellState extends State<AppShell> {
       }
     });
 
-    return Scaffold(
+    return PopScope(
+      // Android back returns to the first tab instead of leaving the app; only
+      // the home tab lets the pop through. HomePage used to own this, but it
+      // stays alive inside the IndexedStack, so it swallowed back on every tab.
+      canPop: idx == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && idx != 0) setState(() => idx = 0);
+      },
+      child: Scaffold(
       body: Stack(
         children: [
           // Main content
@@ -285,6 +321,7 @@ class _AppShellState extends State<AppShell> {
               label: 'Profile'),
         ],
       ),
+      ),
     );
   }
 
@@ -299,21 +336,21 @@ class _AppShellState extends State<AppShell> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF3B82F6),
-              Color(0xFF2563EB),
+              AppColors.primaryLight,
+              AppColors.primary,
               Color(0xFF1D4ED8),
             ],
           ),
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withOpacity(0.4),
+              color: AppColors.primary.withValues(alpha: 0.4),
               blurRadius: 12,
               offset: const Offset(0, 4),
               spreadRadius: 2,
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -328,7 +365,7 @@ class _AppShellState extends State<AppShell> {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
+                  color: Colors.white.withValues(alpha: 0.3),
                   width: 2,
                 ),
               ),

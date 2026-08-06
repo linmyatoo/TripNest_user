@@ -1,8 +1,12 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 
+import '../../models/booking.dart';
 import 'auth_service.dart';
+import 'booking_service.dart';
+import 'session.dart';
+import 'http_client.dart';
+import '../config/api_endpoints.dart';
 
 /// Model for a chat message
 class Message {
@@ -127,38 +131,42 @@ class Member {
 }
 
 class ChatService {
-    /// Leave a chat room
-    static Future<void> leaveChatRoom(String roomId) async {
-      try {
-        final token = await AuthService.getToken();
-        if (token == null) {
-          throw Exception('Not authenticated');
-        }
-
-        final response = await http.post(
-          Uri.parse('$baseUrl/chat/rooms/$roomId/leave'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-        );
-
-        if (response.statusCode == 200) {
-          // Successfully left the chat room
-          return;
-        } else if (response.statusCode == 403) {
-          throw Exception('You are not a member of this chat room');
-        } else {
-          throw Exception('Failed to leave chat room');
-        }
-      } catch (e) {
-        if (e.toString().contains('Exception:')) {
-          rethrow;
-        }
-        throw Exception('Network error: ${e.toString()}');
+  /// Leave a chat room
+  static Future<void> leaveChatRoom(String roomId) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
       }
+
+      final response = await Http.client.post(
+        Uri.parse('$baseUrl/chat/rooms/$roomId/leave'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      Session.checkResponse(response);
+
+
+      if (response.statusCode == 200) {
+        // Successfully left the chat room
+        return;
+      } else if (response.statusCode == 403) {
+        throw Exception('You are not a member of this chat room');
+      } else {
+        throw Exception('Failed to leave chat room');
+      }
+    } catch (e) {
+      if (e.toString().contains('Exception:')) {
+        rethrow;
+      }
+      throw Exception('Network error: ${e.toString()}');
     }
-  static const String baseUrl = 'https://naylinhtet.me/api';
+  }
+
+  static const String baseUrl = ApiEndpoints.baseUrl;
 
   /// Get all chat rooms user is a member of
   static Future<List<ChatRoom>> getChatRooms() async {
@@ -168,13 +176,16 @@ class ChatService {
         throw Exception('Not authenticated');
       }
 
-      final response = await http.get(
+      final response = await Http.client.get(
         Uri.parse('$baseUrl/chat/rooms'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
+
+      Session.checkResponse(response);
+
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -191,6 +202,36 @@ class ChatService {
       }
       throw Exception('Network error: ${e.toString()}');
     }
+  }
+
+  /// Chat rooms for events the user actually booked.
+  ///
+  /// `GET /chat/rooms` returns every room the backend considers the user a
+  /// member of, and membership does not track bookings: a room could show up
+  /// for an event the user never booked, or linger after a booking was
+  /// cancelled. Chat is a perk of booking, so gate the list on the user's own
+  /// bookings and drop CANCELLED ones.
+  ///
+  /// Throws if either call fails — a failed bookings fetch must not silently
+  /// fall back to showing ungated rooms.
+  static Future<List<ChatRoom>> getBookedChatRooms() async {
+    final results = await Future.wait([
+      getChatRooms(),
+      BookingService.getMyBookings(),
+    ]);
+
+    final rooms = results[0] as List<ChatRoom>;
+    final bookings = results[1] as List<Booking>;
+
+    final bookedEventIds = bookings
+        .where((booking) => booking.status.toUpperCase() != 'CANCELLED')
+        .map((booking) => booking.eventId)
+        .where((eventId) => eventId.isNotEmpty)
+        .toSet();
+
+    return rooms
+        .where((room) => bookedEventIds.contains(room.eventId))
+        .toList();
   }
 
   /// Get messages from a specific chat room
@@ -215,13 +256,16 @@ class ChatService {
       final uri = Uri.parse('$baseUrl/chat/rooms/$roomId/messages')
           .replace(queryParameters: queryParams);
 
-      final response = await http.get(
+      final response = await Http.client.get(
         uri,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
+
+      Session.checkResponse(response);
+
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -250,13 +294,16 @@ class ChatService {
         throw Exception('Not authenticated');
       }
 
-      final response = await http.get(
+      final response = await Http.client.get(
         Uri.parse('$baseUrl/chat/rooms/$roomId/members'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
       );
+
+      Session.checkResponse(response);
+
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -296,7 +343,7 @@ class ChatService {
         throw Exception('Message content cannot exceed 2000 characters');
       }
 
-      final response = await http.post(
+      final response = await Http.client.post(
         Uri.parse('$baseUrl/chat/rooms/$roomId/messages'),
         headers: {
           'Content-Type': 'application/json',
@@ -306,6 +353,9 @@ class ChatService {
           'content': content,
         }),
       );
+
+      Session.checkResponse(response);
+
 
       if (response.statusCode == 201) {
         final data = jsonDecode(response.body);
