@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:http/http.dart' as http;
 
 import '../../models/event.dart';
 import '../utils/app_log.dart';
@@ -36,6 +37,48 @@ class EventAvailability {
 class EventService {
   static const String baseUrl = ApiEndpoints.baseUrl;
 
+  /// Statuses that mean "the host is not ready yet", not "your request is
+  /// wrong". The API runs on a tier that spins the instance down when idle and
+  /// answers these while it wakes.
+  static const Set<int> _retryableStatuses = {502, 503, 504};
+
+  /// Delay before each retry. Two attempts after the first, so a waking host
+  /// costs a slower load instead of an error screen.
+  static const List<Duration> _retryDelays = [
+    Duration(seconds: 2),
+    Duration(seconds: 5),
+  ];
+
+  /// GETs [url], retrying while the host reports it is still waking up.
+  ///
+  /// Runs [Session.checkResponse] on the final response; callers handle the
+  /// remaining status codes themselves.
+  static Future<http.Response> _get(Uri url) async {
+    var response = await Http.client.get(
+      url,
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    for (final delay in _retryDelays) {
+      if (!_retryableStatuses.contains(response.statusCode)) break;
+      AppLog.d('$url returned ${response.statusCode}, retrying in $delay');
+      await Future.delayed(delay);
+      response = await Http.client.get(
+        url,
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+
+    Session.checkResponse(response);
+    return response;
+  }
+
+  /// Message for a non-200 response. Keeps the status code so a 404 (wrong
+  /// path) is distinguishable from a 502 (host asleep) in the field — these
+  /// used to collapse into one unhelpful string.
+  static String _failure(String what, http.Response response) =>
+      'Failed to load $what (HTTP ${response.statusCode})';
+
   /// Fetch all events
   static Future<List<Event>> getEvents() async {
     try {
@@ -43,19 +86,15 @@ class EventService {
 
       AppLog.d('Fetching events from: $url');
 
-      final response = await Http.client.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
+      final response = await _get(url);
 
       AppLog.d('Response status: ${response.statusCode}');
-      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return Event.listFromJson(data);
       } else {
-        throw Exception('Failed to load events');
+        throw Exception(_failure('events', response));
       }
     } catch (e) {
       AppLog.e('Failed to fetch events', e);
@@ -71,19 +110,15 @@ class EventService {
 
       AppLog.d('Fetching upcoming events from: $url');
 
-      final response = await Http.client.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
+      final response = await _get(url);
 
       AppLog.d('Response status: ${response.statusCode}');
-      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return Event.listFromJson(data);
       } else {
-        throw Exception('Failed to load upcoming events');
+        throw Exception(_failure('upcoming events', response));
       }
     } catch (e) {
       AppLog.e('Failed to fetch upcoming events', e);
@@ -105,13 +140,9 @@ class EventService {
 
       AppLog.d('Fetching ticket availability from: $url');
 
-      final response = await Http.client.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
+      final response = await _get(url);
 
       AppLog.d('Ticket availability status: ${response.statusCode}');
-      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> body = jsonDecode(response.body);
@@ -126,7 +157,7 @@ class EventService {
           ..._parseAvailability(fullyBookedRaw, fullyBooked: true),
         ];
       } else {
-        throw Exception('Failed to load ticket availability');
+        throw Exception(_failure('ticket availability', response));
       }
     } catch (e) {
       AppLog.e('Failed to fetch ticket availability', e);
@@ -142,13 +173,9 @@ class EventService {
 
       AppLog.d('Fetching event from: $url');
 
-      final response = await Http.client.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
+      final response = await _get(url);
 
       AppLog.d('Response status: ${response.statusCode}');
-      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -156,7 +183,7 @@ class EventService {
       } else if (response.statusCode == 404) {
         throw Exception('Event not found');
       } else {
-        throw Exception('Failed to load event');
+        throw Exception(_failure('event', response));
       }
     } catch (e) {
       AppLog.e('Failed to fetch event', e);
@@ -188,19 +215,15 @@ class EventService {
 
       AppLog.d('Searching events from: $url');
 
-      final response = await Http.client.get(
-        url,
-        headers: {'Content-Type': 'application/json'},
-      );
+      final response = await _get(url);
 
       AppLog.d('Search response status: ${response.statusCode}');
-      Session.checkResponse(response);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return Event.listFromJson(data);
       } else {
-        throw Exception('Failed to search events');
+        throw Exception(_failure('search results', response));
       }
     } catch (e) {
       AppLog.e('Failed to search events', e);

@@ -25,7 +25,12 @@ class _HomePageState extends State<HomePage> {
   List<Event> _upcomingEvents = [];
   Map<String, double> _eventRatings = {};
   bool _isLoading = true;
+
+  /// Set only when *every* event fetch failed — one failing section must not
+  /// blank the whole page.
   String? _errorMessage;
+  String? _popularErrorMessage;
+  String? _upcomingErrorMessage;
   String _displayName = 'Traveler';
   int _unreadNotificationCount = 0;
   AirQualityData? _aqiData;
@@ -127,16 +132,37 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _popularErrorMessage = null;
+      _upcomingErrorMessage = null;
     });
 
     try {
+      // Settled per call, not Future.wait's fail-fast: a flaky availability
+      // request used to replace the whole page with an error even when the
+      // upcoming list had loaded fine.
+      Object? upcomingError;
+      Object? availabilityError;
+
       final results = await Future.wait([
-        EventService.getUpcomingEvents(),
-        EventService.getEventsByTicketAvailability(),
+        EventService.getUpcomingEvents().catchError((Object e) {
+          upcomingError = e;
+          return <Event>[];
+        }),
+        EventService.getEventsByTicketAvailability().catchError((Object e) {
+          availabilityError = e;
+          return <EventAvailability>[];
+        }),
       ]);
 
       final upcomingEvents = results[0] as List<Event>;
       final availability = results[1] as List<EventAvailability>;
+
+      if (upcomingError != null) {
+        AppLog.e('Upcoming events failed', upcomingError);
+      }
+      if (availabilityError != null) {
+        AppLog.e('Ticket availability failed', availabilityError);
+      }
 
       final now = DateTime.now();
 
@@ -179,16 +205,28 @@ class _HomePageState extends State<HomePage> {
         _popularEvents = popularEvents;
         _upcomingEvents = upcomingEvents;
         _eventRatings = ratings;
+        // Full-page error only when nothing at all loaded.
+        _errorMessage = (upcomingError != null && availabilityError != null)
+            ? _readable(upcomingError!)
+            : null;
+        _popularErrorMessage =
+            availabilityError == null ? null : _readable(availabilityError!);
+        _upcomingErrorMessage =
+            upcomingError == null ? null : _readable(upcomingError!);
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = _readable(e);
         _isLoading = false;
       });
     }
   }
+
+  /// Strips Dart's `Exception: ` prefix so the UI shows the message alone.
+  static String _readable(Object error) =>
+      error.toString().replaceFirst('Exception: ', '');
 
   @override
   Widget build(BuildContext context) {
@@ -267,13 +305,14 @@ class _HomePageState extends State<HomePage> {
 
                         // Horizontal popular cards
                         _popularEvents.isEmpty
-                            ? const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(32.0),
-                                  child: Text('No popular events yet.',
-                                      style: TextStyle(
-                                          color: AppColors.muted)),
-                                ),
+                            ? _sectionMessage(
+                                _popularErrorMessage == null
+                                    ? 'No popular events yet.'
+                                    : "Couldn't load popular events.\n"
+                                        '$_popularErrorMessage',
+                                onRetry: _popularErrorMessage == null
+                                    ? null
+                                    : _loadEvents,
                               )
                             : SizedBox(
                                 height: 252,
@@ -297,13 +336,14 @@ class _HomePageState extends State<HomePage> {
 
                         // Vertical upcoming list — sorted by date asc
                         if (_upcomingEvents.isEmpty)
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(32.0),
-                              child: Text('No upcoming events',
-                                  style: TextStyle(
-                                      color: AppColors.muted)),
-                            ),
+                          _sectionMessage(
+                            _upcomingErrorMessage == null
+                                ? 'No upcoming events'
+                                : "Couldn't load upcoming events.\n"
+                                    '$_upcomingErrorMessage',
+                            onRetry: _upcomingErrorMessage == null
+                                ? null
+                                : _loadEvents,
                           )
                         else
                           ..._upcomingEvents.map(
@@ -322,6 +362,32 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
+    );
+  }
+
+  /// Placeholder for an empty or failed section, with Retry when it failed.
+  Widget _sectionMessage(String message, {VoidCallback? onRetry}) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          children: [
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

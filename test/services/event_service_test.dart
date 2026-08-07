@@ -121,4 +121,54 @@ void main() {
       expect(rows.single.bookedTickets, 3);
     });
   });
+
+  group('failure reporting', () {
+    test('the error names the status code', () async {
+      // Regression: every non-200 collapsed into 'Failed to load ticket
+      // availability', so a 404 from a wrong path was indistinguishable from
+      // a 502 from a sleeping host.
+      respondWith('{"error":"not found"}', status: 404);
+
+      expect(
+        EventService.getEventsByTicketAvailability(),
+        throwsA(isA<Exception>().having(
+          (e) => e.toString(),
+          'message',
+          contains('HTTP 404'),
+        )),
+      );
+    });
+
+    test('a 404 is not retried', () async {
+      var calls = 0;
+      Http.overrideClient(MockClient((_) async {
+        calls++;
+        return http.Response('{}', 404);
+      }));
+
+      await expectLater(EventService.getEvents(), throwsException);
+      expect(calls, 1);
+    });
+
+    test('retries while the host reports it is waking up', () async {
+      // The API runs on a tier that spins down when idle and answers 502 for
+      // the first request after that.
+      var calls = 0;
+      Http.overrideClient(MockClient((_) async {
+        calls++;
+        if (calls == 1) return http.Response('{}', 502);
+        return http.Response(
+          jsonEncode([
+            {'id': 'a', 'title': 'A', 'date': '2026-01-01T00:00:00.000Z'},
+          ]),
+          200,
+        );
+      }));
+
+      final events = await EventService.getEvents();
+
+      expect(calls, 2);
+      expect(events.single.id, 'a');
+    });
+  });
 }
