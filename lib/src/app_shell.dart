@@ -156,7 +156,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       }
 
       // Check each room for new messages
-      bool hasNewMessages = false;
+      final roomsWithNewMessages = <ChatRoom>[];
       for (final room in rooms) {
         if (room.lastMessage != null) {
           final lastKnownId = _lastKnownMessageIds[room.id];
@@ -176,26 +176,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               continue;
             }
 
-            hasNewMessages = true;
-
-            final senderName = room.lastMessage!.senderName;
-            final messageContent = room.lastMessage!.content;
-
-            // Show system notification with correct room info
-            LocalNotificationService.showMessageNotification(
-              senderName: room.eventTitle,
-              message: '$senderName: $messageContent',
-              roomId: room.id,
-              roomName: room.eventTitle,
-            );
-
-            break; // Only show one notification at a time
+            roomsWithNewMessages.add(room);
           }
         }
       }
 
-      if (hasNewMessages) {
-        _messageNotifier.setUnreadCount(1);
+      if (roomsWithNewMessages.isNotEmpty) {
+        // Still only one system notification per poll, but the badge now
+        // reflects how many rooms are actually waiting. The count accumulates
+        // across polls and resets when the user opens the Messages tab.
+        final room = roomsWithNewMessages.first;
+        LocalNotificationService.showMessageNotification(
+          senderName: room.eventTitle,
+          message: '${room.lastMessage!.senderName}: '
+              '${room.lastMessage!.content}',
+          roomId: room.id,
+          roomName: room.eventTitle,
+        );
+
+        _messageNotifier.setUnreadCount(
+          _messageNotifier.unreadCount + roomsWithNewMessages.length,
+        );
       }
       _saveLastKnownMessageIds();
     } catch (e) {
@@ -309,10 +310,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           NavigationDestination(
               icon: Badge(
                 isLabelVisible: _messageNotifier.unreadCount > 0,
+                label: Text('${_messageNotifier.unreadCount}'),
                 child: const Icon(Icons.message_outlined),
               ),
               selectedIcon: Badge(
                 isLabelVisible: _messageNotifier.unreadCount > 0,
+                label: Text('${_messageNotifier.unreadCount}'),
                 child: const Icon(Icons.message),
               ),
               label: 'Message'),
