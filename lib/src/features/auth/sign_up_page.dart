@@ -45,7 +45,10 @@ class _SignUpPageState extends State<SignUpPage> {
       _showError('Please enter your email');
       return;
     }
-    if (_passwordController.text.trim().isEmpty) {
+    // Not trimmed — see the same note in LoginPage. Registering a trimmed
+    // password the user cannot reproduce at login is worse than accepting
+    // the stray space.
+    if (_passwordController.text.isEmpty) {
       _showError('Please enter your password');
       return;
     }
@@ -63,7 +66,7 @@ class _SignUpPageState extends State<SignUpPage> {
         username: _nameController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
         email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        password: _passwordController.text,
         role: 'user',
       );
 

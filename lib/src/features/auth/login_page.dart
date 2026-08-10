@@ -133,7 +133,10 @@ class _LoginPageState extends State<LoginPage> {
       _showError('Please enter your email');
       return;
     }
-    if (_passwordController.text.trim().isEmpty) {
+    // Passwords are never trimmed: a leading or trailing space is a valid
+    // character, and silently stripping it locks the user out of an account
+    // they registered with.
+    if (_passwordController.text.isEmpty) {
       _showError('Please enter your password');
       return;
     }
@@ -144,7 +147,7 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
+      final password = _passwordController.text;
 
       final response = await AuthService.login(
         email: email,
