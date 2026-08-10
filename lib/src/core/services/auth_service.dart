@@ -193,19 +193,23 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final token = _extractToken(data);
-        if (token != null) {
-          final user = _extractUser(data);
-          await _saveSession(
-            token: token,
-            userId: _firstNonEmpty(user, ['id', '_id', 'userId']) ?? 'unknown',
-            username: _firstNonEmpty(user, ['username', 'name']) ?? 'User',
-            // Use email from response, or fallback to the email used for login
-            email: _firstNonEmpty(user, ['email']) ?? email,
-            role: _firstNonEmpty(user, ['role']) ?? 'user',
-          );
-        } else {
+        // No token means no session. Returning success here let the login
+        // screen navigate into an app where every authenticated call then
+        // failed with "Not authenticated".
+        if (token == null) {
           AppLog.e('Login succeeded but no token was found in the response.');
+          throw Exception('Login failed: the server did not return a token');
         }
+
+        final user = _extractUser(data);
+        await _saveSession(
+          token: token,
+          userId: _firstNonEmpty(user, ['id', '_id', 'userId']) ?? 'unknown',
+          username: _firstNonEmpty(user, ['username', 'name']) ?? 'User',
+          // Use email from response, or fallback to the email used for login
+          email: _firstNonEmpty(user, ['email']) ?? email,
+          role: _firstNonEmpty(user, ['role']) ?? 'user',
+        );
         return data;
       } else {
         // Login failed
@@ -432,7 +436,6 @@ class AuthService {
       );
 
       AppLog.d('PATCH /profile/me -> ${response.statusCode}');
-    Session.checkResponse(response);
       Session.checkResponse(response);
 
       if (response.statusCode >= 500) {
