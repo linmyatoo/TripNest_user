@@ -207,14 +207,19 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
+  /// Tab indices must match the [IndexedStack] children below:
+  /// 0 Home, 1 My Booking, 2 Messages, 3 Favorites, 4 Profile.
+  static const int _messagesTab = 2;
+  static const int _favoritesTab = 3;
+
   void _onTabSelected(int i) {
-    // If switching to favorites tab, force rebuild to refresh data
-    if (i == 2) {
-      _favoritesRebuildKey++;
-    }
     // If switching to messages tab, clear unread badge
-    if (i == 3) {
+    if (i == _messagesTab) {
       _messageNotifier.clearUnread();
+    }
+    // If switching to favorites tab, force rebuild to refresh data
+    if (i == _favoritesTab) {
+      _favoritesRebuildKey++;
     }
     setState(() => idx = i);
   }
