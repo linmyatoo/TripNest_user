@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../core/config/api_config.dart';
 import '../../core/services/http_client.dart';
@@ -51,8 +52,13 @@ Key features of TripNest:
 - Manage bookings
 - Get personalized suggestions
 
-Be concise, friendly, and use emojis occasionally to keep the conversation engaging. 
-Always be helpful and provide actionable advice when possible.''';
+Be concise, friendly, and use emojis occasionally to keep the conversation engaging.
+Always be helpful and provide actionable advice when possible.
+
+Formatting: replies render as markdown inside a narrow chat bubble. Use short
+paragraphs and "-" bullet lists or **bold** where they genuinely help
+scannability, but skip headers (#), tables, and horizontal rules — they don't
+fit a chat bubble. Keep replies brief by default.''';
 
   @override
   void initState() {
@@ -310,14 +316,16 @@ Always be helpful and provide actionable advice when possible.''';
                   bottomRight: Radius.circular(isUser ? 4 : 18),
                 ),
               ),
-              child: Text(
-                message.text,
-                style: TextStyle(
-                  color: isUser ? Colors.white : Colors.black,
-                  fontSize: 15,
-                  height: 1.4,
-                ),
-              ),
+              child: isUser
+                  ? Text(
+                      message.text,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        height: 1.4,
+                      ),
+                    )
+                  : _MarkdownMessage(text: message.text),
             ),
           ),
           if (isUser) const SizedBox(width: 8),
@@ -414,6 +422,59 @@ class _TypingDotsState extends State<_TypingDots>
           }),
         );
       },
+    );
+  }
+}
+
+/// Renders assistant replies as markdown (bold, lists, code, links) instead
+/// of showing raw `**`/`-`/backtick syntax as literal characters.
+class _MarkdownMessage extends StatelessWidget {
+  const _MarkdownMessage({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return MarkdownBody(
+      data: text,
+      selectable: true,
+      styleSheet: MarkdownStyleSheet(
+        p: const TextStyle(color: Colors.black, fontSize: 15, height: 1.4),
+        strong: const TextStyle(
+          color: Colors.black,
+          fontSize: 15,
+          height: 1.4,
+          fontWeight: FontWeight.w700,
+        ),
+        em: const TextStyle(
+          color: Colors.black,
+          fontSize: 15,
+          height: 1.4,
+          fontStyle: FontStyle.italic,
+        ),
+        listBullet: const TextStyle(color: Colors.black, fontSize: 15),
+        code: TextStyle(
+          color: Colors.black,
+          fontSize: 13.5,
+          backgroundColor: Colors.grey.shade300,
+        ),
+        codeblockDecoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        blockSpacing: 8,
+        listIndent: 20,
+        h1: const TextStyle(
+            color: Colors.black, fontSize: 19, fontWeight: FontWeight.w700),
+        h2: const TextStyle(
+            color: Colors.black, fontSize: 17, fontWeight: FontWeight.w700),
+        h3: const TextStyle(
+            color: Colors.black, fontSize: 16, fontWeight: FontWeight.w700),
+        a: const TextStyle(
+          color: Color(0xFF007AFF),
+          decoration: TextDecoration.underline,
+        ),
+      ),
     );
   }
 }
