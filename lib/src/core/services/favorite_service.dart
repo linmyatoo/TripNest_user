@@ -4,12 +4,8 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/app_log.dart';
-import 'auth_service.dart';
-import 'http_client.dart';
-import '../config/api_endpoints.dart';
 
 class FavoriteService {
-  static const String baseUrl = ApiEndpoints.baseUrl;
   static const String _favoritesKey = 'favorite_event_ids';
 
   /// Serializes every mutation. Two taps in quick succession would otherwise
@@ -58,7 +54,6 @@ class FavoriteService {
         favorites.add(eventId);
         await prefs.setString(_favoritesKey, jsonEncode(favorites));
       }
-      await _syncAddFavoriteToApi(eventId);
     });
   }
 
@@ -69,7 +64,6 @@ class FavoriteService {
       final favorites = await getFavoriteIds();
       favorites.remove(eventId);
       await prefs.setString(_favoritesKey, jsonEncode(favorites));
-      await _syncRemoveFavoriteFromApi(eventId);
     });
   }
 
@@ -82,50 +76,6 @@ class FavoriteService {
     } else {
       await addFavorite(eventId);
       return true;
-    }
-  }
-
-  /// Sync add favorite to API. Local storage stays the source of truth, so a
-  /// failure here is logged rather than surfaced — but it is no longer
-  /// invisible, and it no longer races the local write.
-  static Future<void> _syncAddFavoriteToApi(String eventId) async {
-    try {
-      final token = await AuthService.getToken();
-      if (token == null) return;
-
-      final response = await Http.client.post(
-        Uri.parse('$baseUrl/favorites'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'eventId': eventId}),
-      );
-      if (response.statusCode >= 400) {
-        AppLog.e('Favorite add did not sync (${response.statusCode})');
-      }
-    } catch (e) {
-      AppLog.e('Favorite add did not sync', e);
-    }
-  }
-
-  /// Sync remove favorite from API (see [_syncAddFavoriteToApi]).
-  static Future<void> _syncRemoveFavoriteFromApi(String eventId) async {
-    try {
-      final token = await AuthService.getToken();
-      if (token == null) return;
-
-      final response = await Http.client.delete(
-        Uri.parse('$baseUrl/favorites/$eventId'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
-      if (response.statusCode >= 400) {
-        AppLog.e('Favorite removal did not sync (${response.statusCode})');
-      }
-    } catch (e) {
-      AppLog.e('Favorite removal did not sync', e);
     }
   }
 

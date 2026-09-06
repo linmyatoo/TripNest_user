@@ -155,7 +155,26 @@ class AuthService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Registration successful
+        // Registration successful. The backend's /auth/register only
+        // accepts {email, password, name} and silently drops phone_number,
+        // so persist it via the profile endpoint using the token this
+        // response already gives us. Best-effort: a failure here shouldn't
+        // fail the signup itself.
+        final registerToken = _extractToken(data);
+        if (registerToken != null && phoneNumber.isNotEmpty) {
+          try {
+            await Http.client.patch(
+              Uri.parse('$baseUrl/profile/me'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $registerToken',
+              },
+              body: jsonEncode({'phone': phoneNumber}),
+            );
+          } catch (e) {
+            AppLog.e('Failed to persist phone number after registration', e);
+          }
+        }
         return data;
       } else {
         // Registration failed
@@ -202,13 +221,24 @@ class AuthService {
         }
 
         final user = _extractUser(data);
+        // Backend returns a flat payload ({token, userId, email, roles, ...}),
+        // not a nested user object, so fall back to top-level fields.
         await _saveSession(
           token: token,
-          userId: _firstNonEmpty(user, ['id', '_id', 'userId']) ?? 'unknown',
-          username: _firstNonEmpty(user, ['username', 'name']) ?? 'User',
+          userId: _firstNonEmpty(user, ['id', '_id', 'userId']) ??
+              _firstNonEmpty(data, ['id', '_id', 'userId']) ??
+              'unknown',
+          username: _firstNonEmpty(user, ['username', 'name']) ??
+              _firstNonEmpty(data, ['username', 'name']) ??
+              'User',
           // Use email from response, or fallback to the email used for login
-          email: _firstNonEmpty(user, ['email']) ?? email,
-          role: _firstNonEmpty(user, ['role']) ?? 'user',
+          email: _firstNonEmpty(user, ['email']) ??
+              _firstNonEmpty(data, ['email']) ??
+              email,
+          role: _firstNonEmpty(user, ['role']) ??
+              _firstNonEmpty(data, ['role']) ??
+              _firstRoleFromList(data['roles']) ??
+              'user',
         );
         return data;
       } else {
@@ -708,6 +738,14 @@ class AuthService {
       if (value is String && value.isNotEmpty) {
         return value;
       }
+    }
+    return null;
+  }
+
+  static String? _firstRoleFromList(dynamic roles) {
+    if (roles is List && roles.isNotEmpty) {
+      final first = roles.first;
+      if (first is String && first.isNotEmpty) return first;
     }
     return null;
   }

@@ -161,13 +161,23 @@ class _MyBookingPageState extends State<MyBookingPage> {
       _completedEntries.length,
       (i) {
         final entry = _completedEntries[i];
+        // Backend only accepts a review once the booking is CONFIRMED
+        // (organizer/admin action) — offering the button before that
+        // guarantees a 403 from the review endpoint.
+        final canReview = entry.booking.status == 'CONFIRMED';
         return _CompletedBookingTile(
           event: entry.event,
-          trailing: TextButton(
-            onPressed: () => Navigator.pushNamed(context, AppRoutes.review,
-                arguments: entry.event.id),
-            child: const Text('Write a review'),
-          ),
+          trailing: canReview
+              ? TextButton(
+                  onPressed: () => Navigator.pushNamed(
+                      context, AppRoutes.review,
+                      arguments: entry.event.id),
+                  child: const Text('Write a review'),
+                )
+              : const Text(
+                  'Review available once confirmed',
+                  style: TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
           onTap: () => Navigator.pushNamed(context, AppRoutes.eventDetails,
               arguments: entry.event.id),
         );
