@@ -115,7 +115,7 @@ Always be helpful and provide actionable advice when possible.''';
 
   Future<String> _callChatApi() async {
     if (ApiConfig.isChatKeyMissing) {
-      throw Exception('Missing API key for ${ApiConfig.chatProvider.name}');
+      throw Exception('Missing Groq API key');
     }
 
     // _messages already ends with this turn (added by _sendMessage), so it must
