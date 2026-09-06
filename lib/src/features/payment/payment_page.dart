@@ -229,7 +229,7 @@ class _PaymentPageState extends State<PaymentPage> {
         eventId: event.id,
         ticketCounts: personCount,
       );
-      final bookingId = booking?.id ?? widget.bookingId;
+      final bookingId = booking.id ?? widget.bookingId;
 
       // Confirm the booking if bookingId is available
       if (bookingId != null) {
