@@ -4,6 +4,7 @@ import '../../app_router.dart';
 import '../../core/services/booking_service.dart';
 import '../../core/services/local_notification_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/app_log.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/event.dart';
 
@@ -224,34 +225,24 @@ class _PaymentPageState extends State<PaymentPage> {
     setState(() => _isSubmitting = true);
 
     try {
-      // Create booking and get bookingId
+      // Payment is simulated: creating the booking is the entire purchase
+      // action, there is no separate user-facing confirm step (confirming a
+      // booking is an organizer/admin action, not something the buyer does).
       final booking = await BookingService.createBooking(
         eventId: event.id,
         ticketCounts: personCount,
       );
-      final bookingId = booking.id ?? widget.bookingId;
 
-      // Confirm the booking if bookingId is available
-      if (bookingId != null) {
-        try {
-          await BookingService.confirmBooking(bookingId);
-        } catch (e) {
-          print('❌ Booking confirmation error: $e');
-        }
-      }
-
-      // Trigger local notification with sound and vibration
-      print('📢 Triggering notification for: ${event.title}');
+      AppLog.d('Triggering notification for: ${event.title}');
       try {
         await LocalNotificationService.showBookingNotification(
-          bookingId: event.id,
+          bookingId: booking.id,
           eventTitle: event.title,
           ticketCount: personCount,
           totalPrice: (event.priceBaht * personCount).toDouble(),
         );
-        print('✅ Notification triggered successfully');
       } catch (notifError) {
-        print('❌ Notification error: $notifError');
+        AppLog.e('Notification error', notifError);
       }
 
       if (!mounted) return;
