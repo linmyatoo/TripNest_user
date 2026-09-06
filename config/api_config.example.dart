@@ -17,7 +17,7 @@ class ApiConfig {
   static const String chatModel = 'openai/gpt-oss-120b';
   static const double chatTemperature = 0.7;
   static const double chatTopP = 0.9;
-  static const int chatMaxTokens = 500;
+  static const int chatMaxTokens = 1024;
 
   // --- WAQI air quality (https://aqicn.org/data-platform/token/) ---
   static const String waqiApiToken = 'PASTE_YOUR_WAQI_TOKEN_HERE';
