@@ -139,8 +139,9 @@ Always be helpful and provide actionable advice when possible.''';
       body: jsonEncode({
         'model': ApiConfig.chatModel,
         'messages': messages,
-        'temperature': 0.7,
-        'max_tokens': 1024,
+        'temperature': ApiConfig.chatTemperature,
+        'top_p': ApiConfig.chatTopP,
+        'max_tokens': ApiConfig.chatMaxTokens,
       }),
     );
 

@@ -15,6 +15,9 @@ class ApiConfig {
   static const String chatApiKey = 'PASTE_YOUR_GROQ_API_KEY_HERE';
   static const String chatBaseUrl = 'https://api.groq.com/openai/v1';
   static const String chatModel = 'openai/gpt-oss-120b';
+  static const double chatTemperature = 0.7;
+  static const double chatTopP = 0.9;
+  static const int chatMaxTokens = 500;
 
   // --- WAQI air quality (https://aqicn.org/data-platform/token/) ---
   static const String waqiApiToken = 'PASTE_YOUR_WAQI_TOKEN_HERE';
