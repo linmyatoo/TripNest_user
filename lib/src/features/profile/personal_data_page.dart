@@ -193,6 +193,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
 
     final picked = await showModalBottomSheet<DateTime>(
       context: context,
+      backgroundColor: Colors.white,
       builder: (sheetContext) {
         return SafeArea(
           child: Column(
@@ -214,6 +215,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
               SizedBox(
                 height: 220,
                 child: CupertinoDatePicker(
+                  backgroundColor: Colors.white,
                   mode: CupertinoDatePickerMode.date,
                   initialDateTime: selected,
                   minimumDate: firstDate,
@@ -540,6 +542,7 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
                   DropdownButtonFormField<String>(
                     initialValue: _selectedGender,
                     hint: const Text('Select Gender'),
+                    dropdownColor: Colors.white,
                     decoration: InputDecoration(
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 14),
