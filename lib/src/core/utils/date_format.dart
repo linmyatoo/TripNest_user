@@ -57,6 +57,15 @@ class AppDate {
   static String numericDate(DateTime date) =>
       '${date.day}/${date.month}/${date.year}';
 
+  /// `2:30 PM`
+  static String time(DateTime date) {
+    final hour24 = date.hour;
+    final period = hour24 >= 12 ? 'PM' : 'AM';
+    final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$hour12:$minute $period';
+  }
+
   /// `Just now`, `5m ago`, `3h ago`, `2d ago`, then an absolute date.
   static String relative(DateTime from, {DateTime? now}) {
     final diff = (now ?? DateTime.now()).difference(from);

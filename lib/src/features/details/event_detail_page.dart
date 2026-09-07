@@ -7,6 +7,7 @@ import '../../core/services/event_service.dart';
 import '../../core/services/favorite_service.dart';
 import '../../core/services/review_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/date_format.dart';
 import '../../core/widgets/primary_button.dart';
 import '../../models/event.dart';
 
@@ -588,6 +589,22 @@ class _EventDetailPageState extends State<EventDetailPage> {
                         size: 16, color: AppColors.muted),
                     const SizedBox(width: 6),
                     Text(event.location,
+                        style:
+                            const TextStyle(color: AppColors.muted)),
+                  ]),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    const Icon(Icons.calendar_today_outlined,
+                        size: 16, color: AppColors.muted),
+                    const SizedBox(width: 6),
+                    Text(AppDate.longDate(event.date),
+                        style:
+                            const TextStyle(color: AppColors.muted)),
+                    const SizedBox(width: 14),
+                    const Icon(Icons.access_time,
+                        size: 16, color: AppColors.muted),
+                    const SizedBox(width: 6),
+                    Text(AppDate.time(event.date),
                         style:
                             const TextStyle(color: AppColors.muted)),
                   ]),
