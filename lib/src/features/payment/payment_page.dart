@@ -248,16 +248,17 @@ class _PaymentPageState extends State<PaymentPage> {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
 
-      await _showResultDialog(
+      final goToChat = await _showResultDialog(
         isSuccess: true,
         title: 'Booking Success',
         message: 'Your payment has been successfully processed.',
+        showChatButton: true,
       );
 
       if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil(
           AppRoutes.appShell, (r) => false,
-          arguments: 0);
+          arguments: goToChat ? 2 : 0);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
@@ -270,13 +271,14 @@ class _PaymentPageState extends State<PaymentPage> {
     }
   }
 
-  Future<void> _showResultDialog({
+  Future<bool> _showResultDialog({
     required bool isSuccess,
     required String title,
     required String message,
+    bool showChatButton = false,
   }) async {
-    if (!mounted) return;
-    await showDialog(
+    if (!mounted) return false;
+    final goToChat = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => Dialog(
@@ -296,16 +298,34 @@ class _PaymentPageState extends State<PaymentPage> {
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
+            if (showChatButton) ...[
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Go to Chat'),
+                ),
               ),
-            ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Close'),
+                ),
+              ),
+            ] else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Close'),
+                ),
+              ),
           ]),
         ),
       ),
     );
+    return goToChat ?? false;
   }
 }

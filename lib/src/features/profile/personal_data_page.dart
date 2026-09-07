@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
@@ -111,15 +112,17 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
             ? user['phone']
             : (user['phone_number'] ?? '');
 
-        // Gender
-        final gender = user['gender'];
-        if (gender != null &&
-            gender != 'Not Set' &&
-            gender.toString().isNotEmpty) {
-          _selectedGender = gender;
-        } else {
-          _selectedGender = null;
-        }
+        // Gender - backend may return any casing (e.g. 'male'); the dropdown
+        // items are exactly 'Male'/'Female'/'Other', so normalize or the
+        // DropdownButtonFormField assertion fails when value doesn't match
+        // an item exactly.
+        final gender = user['gender']?.toString();
+        const validGenders = ['Male', 'Female', 'Other'];
+        final normalizedGender = validGenders.firstWhere(
+          (g) => g.toLowerCase() == gender?.toLowerCase(),
+          orElse: () => '',
+        );
+        _selectedGender = normalizedGender.isNotEmpty ? normalizedGender : null;
 
         // Date of Birth - parse and format without time
         if (user['dateOfBirth'] != null && user['dateOfBirth'] != 'Not Set') {
@@ -185,11 +188,43 @@ class _PersonalDataPageState extends State<PersonalDataPage> {
 
   Future<void> _pickDob() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final firstDate = DateTime(now.year - 90);
+    var selected = DateTime(now.year - 24, 11, 24);
+
+    final picked = await showModalBottomSheet<DateTime>(
       context: context,
-      initialDate: DateTime(now.year - 24, 11, 24),
-      firstDate: DateTime(now.year - 90),
-      lastDate: now,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheetContext, selected),
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+              SizedBox(
+                height: 220,
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: selected,
+                  minimumDate: firstDate,
+                  maximumDate: now,
+                  onDateTimeChanged: (value) => selected = value,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
     if (picked != null) {
       dobCtrl.text =
