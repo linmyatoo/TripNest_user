@@ -51,9 +51,12 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
         mood: mood,
       );
 
+      final now = DateTime.now();
+      final upcomingEvents = events.where((e) => e.date.isAfter(now)).toList();
+
       if (!mounted) return;
       setState(() {
-        _results = events;
+        _results = upcomingEvents;
         _isLoading = false;
       });
 
